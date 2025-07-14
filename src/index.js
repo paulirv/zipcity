@@ -7,6 +7,8 @@
  * Routes:
  * - GET /api/us?city=<city>&state=<state> - US ZIP lookup
  * - GET /api/ca?city=<city>&province=<province> - Canada postal code lookup
+ * - GET /api/autocomplete/us?q=<query>&limit=<limit> - US autocomplete for cities/zips
+ * - GET /api/autocomplete/ca?q=<query>&limit=<limit> - Canada autocomplete for cities/postal codes
  * 
  * Custom Domain Setup:
  * 1. Add DNS CNAME: zipcity.iwpi.com -> your-worker.your-subdomain.workers.dev
@@ -31,6 +33,15 @@ export default {
       return handleCORS();
     }
     
+    // Autocomplete routes
+    if (pathname.startsWith('/api/autocomplete/us')) {
+      return handleUSAutocomplete(request, env);
+    }
+    
+    if (pathname.startsWith('/api/autocomplete/ca')) {
+      return handleCAAutocomplete(request, env);
+    }
+    
     // Route handling
     if (pathname.startsWith('/api/us')) {
       return handleUSLookup(request, env);
@@ -47,7 +58,9 @@ export default {
         error: 'Not found',
         available_endpoints: [
           '/api/us?city=<city>&state=<state>',
-          '/api/ca?city=<city>&province=<province>'
+          '/api/ca?city=<city>&province=<province>',
+          '/api/autocomplete/us?q=<query>&limit=<limit>',
+          '/api/autocomplete/ca?q=<query>&limit=<limit>'
         ]
       }), 
       {
@@ -267,6 +280,184 @@ async function handleCALookup(request, env) {
 }
 
 /**
+ * Handle US autocomplete for city names and ZIP codes
+ * Expected query params: q, limit
+ * Example: /api/autocomplete/us?q=bur&limit=10
+ */
+async function handleUSAutocomplete(request, env) {
+  const url = new URL(request.url);
+  const query = url.searchParams.get('q');
+  const limit = parseInt(url.searchParams.get('limit')) || 10;
+  
+  // Validate required parameters
+  if (!query || query.length < 3) {
+    return new Response(
+      JSON.stringify({ 
+        error: 'Query parameter "q" is required and must be at least 3 characters',
+        example: '/api/autocomplete/us?q=Burli&limit=10'
+      }), 
+      {
+        status: 400,
+        headers: {
+          'Content-Type': 'application/json',
+          ...getCORSHeaders()
+        }
+      }
+    );
+  }
+  
+  // Load US zipcode data from R2 storage
+  try {
+    let zipcodesUS;
+    
+    // Try R2 binding first
+    if (env.ZIP_DATA) {
+      try {
+        const object = await env.ZIP_DATA.get('zipcodes.us.json');
+        if (object) {
+          zipcodesUS = await object.json();
+        }
+      } catch (error) {
+        console.log('R2 binding failed:', error.message);
+      }
+    }
+    
+    // Fallback to public URL if R2 binding failed or no data found
+    if (!zipcodesUS) {
+      console.log('Using public URL fallback for US data');
+      const response = await fetch('https://pub-522895a2a41b453ab908b4e31d9e627a.r2.dev/zipcodes.us.json');
+      if (!response.ok) {
+        throw new Error(`Failed to fetch from public URL: ${response.status}`);
+      }
+      zipcodesUS = await response.json();
+    }
+    
+    // Perform autocomplete search
+    const results = performAutocomplete(zipcodesUS, query, limit);
+    
+    // Return successful result
+    return new Response(
+      JSON.stringify({
+        query: query,
+        results: results,
+        count: results.length
+      }), 
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          ...getCORSHeaders()
+        }
+      }
+    );
+    
+  } catch (error) {
+    return new Response(
+      JSON.stringify({ 
+        error: 'Failed to load zipcode data',
+        details: error.message 
+      }), 
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          ...getCORSHeaders()
+        }
+      }
+    );
+  }
+}
+
+/**
+ * Handle Canada autocomplete for city names and postal codes
+ * Expected query params: q, limit
+ * Example: /api/autocomplete/ca?q=tor&limit=10
+ */
+async function handleCAAutocomplete(request, env) {
+  const url = new URL(request.url);
+  const query = url.searchParams.get('q');
+  const limit = parseInt(url.searchParams.get('limit')) || 10;
+  
+  // Validate required parameters
+  if (!query || query.length < 3) {
+    return new Response(
+      JSON.stringify({ 
+        error: 'Query parameter "q" is required and must be at least 3 characters',
+        example: '/api/autocomplete/ca?q=Toro&limit=10'
+      }), 
+      {
+        status: 400,
+        headers: {
+          'Content-Type': 'application/json',
+          ...getCORSHeaders()
+        }
+      }
+    );
+  }
+  
+  // Load Canada postal code data from R2 storage
+  try {
+    let zipcodesCA;
+    
+    // Try R2 binding first
+    if (env.ZIP_DATA) {
+      try {
+        const object = await env.ZIP_DATA.get('zipcodes.ca.json');
+        if (object) {
+          zipcodesCA = await object.json();
+        }
+      } catch (error) {
+        console.log('R2 binding failed for Canada data:', error.message);
+      }
+    }
+    
+    // Fallback to public URL if R2 binding failed or no data found
+    if (!zipcodesCA) {
+      console.log('Using public URL fallback for Canada data');
+      const response = await fetch('https://pub-522895a2a41b453ab908b4e31d9e627a.r2.dev/zipcodes.ca.json');
+      if (!response.ok) {
+        throw new Error(`Failed to fetch Canada data from public URL: ${response.status}`);
+      }
+      zipcodesCA = await response.json();
+    }
+    
+    // Perform autocomplete search
+    const results = performAutocomplete(zipcodesCA, query, limit, true);
+    
+    // Return successful result
+    return new Response(
+      JSON.stringify({
+        query: query,
+        results: results,
+        count: results.length
+      }), 
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          ...getCORSHeaders()
+        }
+      }
+    );
+    
+  } catch (error) {
+    return new Response(
+      JSON.stringify({ 
+        error: 'Failed to load postal code data',
+        details: error.message 
+      }), 
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          ...getCORSHeaders()
+        }
+      }
+    );
+  }
+}
+
+/**
  * Find zipcode in data array with case-insensitive matching
  */
 function findZipcode(data, city, state) {
@@ -314,4 +505,67 @@ function getCORSHeaders() {
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Max-Age': '86400'
   };
+}
+
+/**
+ * Perform autocomplete search on the data
+ * Supports both city name search and ZIP/postal code search
+ * @param {Array} data - The zipcode/postal code data array
+ * @param {string} query - The search query
+ * @param {number} limit - Maximum number of results to return
+ * @param {boolean} isCanada - Whether this is Canadian data (affects field names)
+ * @returns {Array} Array of matching results
+ */
+function performAutocomplete(data, query, limit, isCanada = false) {
+  const queryLower = query.toLowerCase();
+  const isNumericQuery = /^\d+/.test(query); // Check if query starts with numbers
+  
+  let matches = [];
+  const seenCities = new Set(); // To avoid duplicate city names
+  
+  if (isNumericQuery) {
+    // ZIP/Postal code search - query starts with numbers
+    matches = data
+      .filter(item => {
+        const code = item.zipcode || '';
+        return code.toLowerCase().startsWith(queryLower);
+      })
+      .map(item => ({
+        type: 'zipcode',
+        display: isCanada 
+          ? `${item.zipcode} - ${item.place}, ${item.state_code}`
+          : `${item.zipcode} - ${item.place}, ${item.state_code}`,
+        value: item.zipcode,
+        city: item.place,
+        state: item.state_code,
+        zipcode: item.zipcode
+      }))
+      .slice(0, limit);
+  } else {
+    // City name search - query is letters
+    for (const item of data) {
+      if (matches.length >= limit) break;
+      
+      const cityName = item.place || '';
+      const cityKey = `${cityName.toLowerCase()},${item.state_code?.toLowerCase()}`;
+      
+      // Check if city name starts with query and we haven't seen this city/state combo
+      if (cityName.toLowerCase().startsWith(queryLower) && !seenCities.has(cityKey)) {
+        seenCities.add(cityKey);
+        matches.push({
+          type: 'city',
+          display: `${item.place}, ${item.state_code}`,
+          value: `${item.place}, ${item.state_code}`,
+          city: item.place,
+          state: item.state_code,
+          zipcode: item.zipcode
+        });
+      }
+    }
+  }
+  
+  // Sort results alphabetically by display value
+  matches.sort((a, b) => a.display.localeCompare(b.display));
+  
+  return matches;
 }
