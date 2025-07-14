@@ -1,0 +1,102 @@
+[
+  {
+    "country_code": "US",
+    "zipcode": "53105",
+    "place": "Burlington",
+    "state": "Wisconsin",
+    "state_code": "WI",
+    "county": "Racine",
+    "latitude": "42.6847",
+    "longitude": "-88.2787"
+  },
+  {
+    "country_code": "US",
+    "zipcode": "05401",
+    "place": "Burlington",
+    "state": "Vermont",
+    "state_code": "VT",
+    "county": "Chittenden",
+    "latitude": "44.4759",
+    "longitude": "-73.2121"
+  },
+  {
+    "country_code": "US",
+    "zipcode": "27215",
+    "place": "Burlington",
+    "state": "North Carolina",
+    "state_code": "NC",
+    "county": "Alamance",
+    "latitude": "36.0957",
+    "longitude": "-79.4378"
+  },
+  {
+    "country_code": "US",
+    "zipcode": "90210",
+    "place": "Beverly Hills",
+    "state": "California",
+    "state_code": "CA",
+    "county": "Los Angeles",
+    "latitude": "34.0901",
+    "longitude": "-118.4065"
+  },
+  {
+    "country_code": "US",
+    "zipcode": "10001",
+    "place": "New York",
+    "state": "New York",
+    "state_code": "NY",
+    "county": "New York",
+    "latitude": "40.7505",
+    "longitude": "-73.9934"
+  },
+  {
+    "country_code": "US",
+    "zipcode": "60601",
+    "place": "Chicago",
+    "state": "Illinois",
+    "state_code": "IL",
+    "county": "Cook",
+    "latitude": "41.8825",
+    "longitude": "-87.6441"
+  },
+  {
+    "country_code": "US",
+    "zipcode": "77001",
+    "place": "Houston",
+    "state": "Texas",
+    "state_code": "TX",
+    "county": "Harris",
+    "latitude": "29.7589",
+    "longitude": "-95.3677"
+  },
+  {
+    "country_code": "US",
+    "zipcode": "85001",
+    "place": "Phoenix",
+    "state": "Arizona",
+    "state_code": "AZ",
+    "county": "Maricopa",
+    "latitude": "33.4481",
+    "longitude": "-112.0733"
+  },
+  {
+    "country_code": "US",
+    "zipcode": "19101",
+    "place": "Philadelphia",
+    "state": "Pennsylvania",
+    "state_code": "PA",
+    "county": "Philadelphia",
+    "latitude": "39.9527",
+    "longitude": "-75.1635"
+  },
+  {
+    "country_code": "US",
+    "zipcode": "78701",
+    "place": "Austin",
+    "state": "Texas",
+    "state_code": "TX",
+    "county": "Travis",
+    "latitude": "30.2710",
+    "longitude": "-97.7436"
+  }
+]

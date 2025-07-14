@@ -1,0 +1,29 @@
+[
+  {
+    "country_code": "CA",
+    "postal_code": "M5H 2N2",
+    "place": "Toronto",
+    "province": "Ontario",
+    "province_code": "ON",
+    "latitude": "43.6532",
+    "longitude": "-79.3832"
+  },
+  {
+    "country_code": "CA",
+    "postal_code": "V6B 1A1",
+    "place": "Vancouver",
+    "province": "British Columbia",
+    "province_code": "BC",
+    "latitude": "49.2827",
+    "longitude": "-123.1207"
+  },
+  {
+    "country_code": "CA",
+    "postal_code": "H3B 1A1",
+    "place": "Montreal",
+    "province": "Quebec",
+    "province_code": "QC",
+    "latitude": "45.5017",
+    "longitude": "-73.5673"
+  }
+]

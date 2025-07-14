@@ -1,0 +1,32 @@
+# Cloudflare Worker configuration for Zip-City Lookup
+name = "zip-city-lookup"
+main = "src/index.js"
+compatibility_date = "2025-07-01"
+
+# Workers KV namespaces (optional - for future migration from static JSON)
+# Uncomment and configure when migrating to KV storage:
+# [[kv_namespaces]]
+# binding = "ZIP_US"
+# id = "your-us-zipcode-kv-namespace-id"
+# preview_id = "your-us-zipcode-preview-kv-namespace-id"
+
+# [[kv_namespaces]]
+# binding = "ZIP_CA"
+# id = "your-ca-zipcode-kv-namespace-id"
+# preview_id = "your-ca-zipcode-preview-kv-namespace-id"
+
+# R2 bucket bindings (optional - for future migration to R2 storage)
+# Uncomment and configure when migrating to R2:
+# [[r2_buckets]]
+# binding = "ZIP_DATA"
+# bucket_name = "zip-city-data"
+
+# Custom domain routing (configure after setting up DNS)
+# Uncomment and modify after setting up zipcity.iwpi.com:
+# [[routes]]
+# pattern = "zipcity.iwpi.com/api/*"
+# zone_name = "iwpi.com"
+
+[vars]
+# Environment variables (if needed)
+# API_VERSION = "1.0"
