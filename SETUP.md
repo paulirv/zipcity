@@ -31,9 +31,13 @@ wrangler dev
 # Run the test script (tests both US and Canada)
 ./test.sh
 
-# Or manually test with curl
+# Or manually test with curl - Local development
 curl -s "http://localhost:8787/api/us?city=Burlington&state=WI"
 curl -s "http://localhost:8787/api/ca?city=Toronto&province=ON"
+
+# Manual test - Production (after deployment)
+curl -s "https://zipcity.iwpi.com/api/us?city=Burlington&state=WI" 
+curl -s "https://zipcity.iwpi.com/api/ca?city=Toronto&province=ON"
 ```
 
 ### 5. Deploy to Cloudflare

@@ -22,11 +22,11 @@ compatibility_date = "2025-07-14"
 binding = "ZIP_DATA"
 bucket_name = "zipcity"
 
-# Custom domain routing (configure after setting up DNS)
-# Uncomment and modify after setting up zipcity.iwpi.com:
-# [[routes]]
-# pattern = "zipcity.iwpi.com/api/*"
-# zone_name = "iwpi.com"
+# Custom domain routing (active)
+# DNS CNAME: zipcity.iwpi.com -> zip-city-lookup.paul-bb4.workers.dev
+[[routes]]
+pattern = "zipcity.iwpi.com/api/*"
+zone_name = "iwpi.com"
 
 [vars]
 # Environment variables (if needed)

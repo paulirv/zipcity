@@ -99,7 +99,14 @@ npm run deploy       # wrangler deploy
 wrangler r2 object put zipcity/zipcodes.us.json --file=data/zipcodes.us.json
 wrangler r2 object put zipcity/zipcodes.ca.json --file=data/zipcodes.ca.json
 
-# Testing
+# Testing - Local
 ./test.sh           # Run comprehensive API tests
+curl -s "http://localhost:8787/api/us?city=Burlington&state=WI"
+
+# Testing - Production
+curl -s "https://zipcity.iwpi.com/api/us?city=Burlington&state=WI"
+curl -s "https://zipcity.iwpi.com/api/ca?city=Toronto&province=ON"
+
+# Monitoring
 wrangler tail       # Monitor logs during testing
 ```

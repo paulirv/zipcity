@@ -14,7 +14,8 @@ echo
 
 # Base URL - change this to your deployed worker URL or custom domain
 BASE_URL="http://localhost:8787"  # For local development
-# BASE_URL="https://zipcity.iwpi.com"  # For production
+# BASE_URL="https://zipcity.iwpi.com"  # For production (custom domain)
+# BASE_URL="https://zip-city-lookup.paul-bb4.workers.dev"  # For production (workers.dev)
 
 echo -e "${YELLOW}Testing US ZIP lookup...${NC}"
 
@@ -123,11 +124,11 @@ echo -e "\n${YELLOW}🏁 Testing complete!${NC}"
 echo
 echo -e "${YELLOW}Example curl commands:${NC}"
 echo "# US lookups:"
-echo "curl -s \"${BASE_URL}/api/us?city=Burlington&state=WI\""
-echo "curl -s \"${BASE_URL}/api/us?city=Chicago&state=IL\""
-echo "curl -s \"${BASE_URL}/api/us?city=Austin&state=TX\""
+echo "curl -s \"https://zipcity.iwpi.com/api/us?city=Burlington&state=WI\""
+echo "curl -s \"https://zipcity.iwpi.com/api/us?city=Chicago&state=IL\""
+echo "curl -s \"https://zipcity.iwpi.com/api/us?city=Austin&state=TX\""
 echo
 echo "# Canada lookups:"
-echo "curl -s \"${BASE_URL}/api/ca?city=Toronto&province=ON\""
-echo "curl -s \"${BASE_URL}/api/ca?city=Vancouver&province=BC\""
-echo "curl -s \"${BASE_URL}/api/ca?city=Montreal&province=QC\""
+echo "curl -s \"https://zipcity.iwpi.com/api/ca?city=Toronto&province=ON\""
+echo "curl -s \"https://zipcity.iwpi.com/api/ca?city=Vancouver&province=BC\""
+echo "curl -s \"https://zipcity.iwpi.com/api/ca?city=Montreal&province=QC\""

@@ -19,23 +19,27 @@ npm install
 # Run locally
 npm run dev
 
-# Test the API
+# Test the API locally
 curl -s "http://localhost:8787/api/us?city=Burlington&state=WI"
 
 # Deploy to Cloudflare
 wrangler login
 npm run deploy
+
+# Test production API
+curl -s "https://zipcity.iwpi.com/api/us?city=Burlington&state=WI"
 ```
 
 ## Repository Structure
 
 ```text
-├── README.md           # This file
-├── SETUP.md           # Detailed setup guide
-├── WRANGLER_COMMANDS.md # Wrangler 4.14.1 command reference
-├── wrangler.toml      # Cloudflare Worker configuration
-├── package.json       # Node.js dependencies
-├── test.sh           # Test script
+├── README.md              # This file
+├── SETUP.md              # Detailed setup guide
+├── WRANGLER_COMMANDS.md  # Wrangler 4.14.1 command reference
+├── wrangler.toml         # Cloudflare Worker configuration
+├── package.json          # Node.js dependencies
+├── test.sh              # Local development test script
+├── test-production.sh   # Production API test script
 ├── src/
 │   └── index.js      # Worker entrypoint
 └── data/
@@ -123,10 +127,13 @@ See [SETUP.md](SETUP.md) for complete migration guides.
 # Run test suite (tests both US and Canada endpoints)
 ./test.sh
 
-# Manual testing
+# Manual testing - Local development
 curl -s "http://localhost:8787/api/us?city=Burlington&state=WI"
 curl -s "http://localhost:8787/api/ca?city=Toronto&province=ON"
-curl -s "http://localhost:8787/api/us?city=Chicago&state=IL"
+
+# Manual testing - Production
+curl -s "https://zipcity.iwpi.com/api/us?city=Burlington&state=WI"
+curl -s "https://zipcity.iwpi.com/api/ca?city=Toronto&province=ON"
 ```
 
 ## Performance Notes
