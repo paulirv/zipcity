@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Zip-City Lookup - Test Script
-# Tests the Cloudflare Worker API endpoints
+# Tests the Cloudflare Worker API endpoints with R2 storage
 
 # Colors for output
 RED='\033[0;31m'
@@ -9,7 +9,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${YELLOW}🚀 Testing Zip-City Lookup Worker${NC}"
+echo -e "${YELLOW}🚀 Testing Zip-City Lookup Worker (R2 Storage)${NC}"
 echo
 
 # Base URL - change this to your deployed worker URL or custom domain
@@ -62,20 +62,72 @@ else
     echo -e "${RED}❌ Test 4 FAILED${NC}"
 fi
 
-# Test 5: Invalid route
-echo -e "\n5. Testing invalid route"
-RESPONSE=$(curl -s "${BASE_URL}/api/invalid")
+echo -e "\n${YELLOW}Testing Canada postal code lookup...${NC}"
+
+# Test 5: Valid Canada lookup - Toronto, ON
+echo -e "\n5. Testing valid Canada lookup: Toronto, ON"
+RESPONSE=$(curl -s "${BASE_URL}/api/ca?city=Toronto&province=ON")
 echo "Response: $RESPONSE"
 
-if echo "$RESPONSE" | grep -q '"error":"Not found"'; then
+if echo "$RESPONSE" | grep -q '"postal_code":"M5A"'; then
     echo -e "${GREEN}✅ Test 5 PASSED${NC}"
 else
     echo -e "${RED}❌ Test 5 FAILED${NC}"
 fi
 
+# Test 6: Case insensitive Canada lookup
+echo -e "\n6. Testing case insensitive Canada lookup: toronto, on"
+RESPONSE=$(curl -s "${BASE_URL}/api/ca?city=toronto&province=on")
+echo "Response: $RESPONSE"
+
+if echo "$RESPONSE" | grep -q '"postal_code":"M5A"'; then
+    echo -e "${GREEN}✅ Test 6 PASSED${NC}"
+else
+    echo -e "${RED}❌ Test 6 FAILED${NC}"
+fi
+
+# Test 7: Canada not found
+echo -e "\n7. Testing Canada not found: NonExistentCity, ZZ"
+RESPONSE=$(curl -s "${BASE_URL}/api/ca?city=NonExistentCity&province=ZZ")
+echo "Response: $RESPONSE"
+
+if echo "$RESPONSE" | grep -q '"error":"Not found"'; then
+    echo -e "${GREEN}✅ Test 7 PASSED${NC}"
+else
+    echo -e "${RED}❌ Test 7 FAILED${NC}"
+fi
+
+# Test 8: Canada missing parameters
+echo -e "\n8. Testing Canada missing parameters"
+RESPONSE=$(curl -s "${BASE_URL}/api/ca?city=Toronto")
+echo "Response: $RESPONSE"
+
+if echo "$RESPONSE" | grep -q '"error":"Missing required parameters"'; then
+    echo -e "${GREEN}✅ Test 8 PASSED${NC}"
+else
+    echo -e "${RED}❌ Test 8 FAILED${NC}"
+fi
+
+# Test 9: Invalid route
+echo -e "\n9. Testing invalid route"
+RESPONSE=$(curl -s "${BASE_URL}/api/invalid")
+echo "Response: $RESPONSE"
+
+if echo "$RESPONSE" | grep -q '"error":"Not found"'; then
+    echo -e "${GREEN}✅ Test 9 PASSED${NC}"
+else
+    echo -e "${RED}❌ Test 9 FAILED${NC}"
+fi
+
 echo -e "\n${YELLOW}🏁 Testing complete!${NC}"
 echo
 echo -e "${YELLOW}Example curl commands:${NC}"
+echo "# US lookups:"
 echo "curl -s \"${BASE_URL}/api/us?city=Burlington&state=WI\""
 echo "curl -s \"${BASE_URL}/api/us?city=Chicago&state=IL\""
 echo "curl -s \"${BASE_URL}/api/us?city=Austin&state=TX\""
+echo
+echo "# Canada lookups:"
+echo "curl -s \"${BASE_URL}/api/ca?city=Toronto&province=ON\""
+echo "curl -s \"${BASE_URL}/api/ca?city=Vancouver&province=BC\""
+echo "curl -s \"${BASE_URL}/api/ca?city=Montreal&province=QC\""

@@ -1,13 +1,14 @@
 # Zip-City Lookup Cloudflare Worker
 
-A lightweight Cloudflare Worker that returns the ZIP/postal code for a given city and state (US), with future support for Canada. Data is served from bundled static JSON files and can be migrated to Cloudflare KV or R2 as needed.
+A lightweight Cloudflare Worker that returns the ZIP/postal code for a given city and state/province. Data is stored in Cloudflare R2 for scalable storage and easy updates, supporting both US ZIP codes and Canada postal codes.
 
 ## Features
 
 - **/api/us** — Lookup U.S. ZIP by `?city=` & `?state=`
-- **Extensible** — Add `/api/ca` for Canada by dropping in `zipcodes.ca.json`
+- **/api/ca** — Lookup Canada postal code by `?city=` & `?province=`
+- **R2 Storage** — Data stored in Cloudflare R2 bucket for scalability
 - **Zero-config SSL** — Supports custom domains (`zipcity.iwpi.com`) via Cloudflare's Automatic SSL
-- **Bundled data** — Ships with `zipcodes.us.json`; future-proofed for KV/R2 migration
+- **Global CDN** — Fast responses worldwide with Cloudflare's edge network
 
 ## Quick Start
 
@@ -22,7 +23,7 @@ npm run dev
 curl -s "http://localhost:8787/api/us?city=Burlington&state=WI"
 
 # Deploy to Cloudflare
-wrangler auth login
+wrangler login
 npm run deploy
 ```
 
@@ -31,6 +32,7 @@ npm run deploy
 ```text
 ├── README.md           # This file
 ├── SETUP.md           # Detailed setup guide
+├── WRANGLER_COMMANDS.md # Wrangler 4.14.1 command reference
 ├── wrangler.toml      # Cloudflare Worker configuration
 ├── package.json       # Node.js dependencies
 ├── test.sh           # Test script
@@ -65,10 +67,19 @@ curl -s "https://zipcity.iwpi.com/api/us?city=Burlington&state=WI"
 }
 ```
 
-### Canada Postal Code Lookup (Future)
+### Canada Postal Code Lookup
 
 ```bash
 curl -s "https://zipcity.iwpi.com/api/ca?city=Toronto&province=ON"
+```
+
+**Response:**
+```json
+{
+  "city": "Toronto",
+  "province": "ON",
+  "postal_code": "M5H 2N2"
+}
 ```
 
 ## Custom Domain Setup
@@ -79,33 +90,29 @@ To set up `zipcity.iwpi.com` with SSL:
 2. **Add Custom Domain** in Cloudflare Workers dashboard
 3. **Enable Automatic HTTPS** (SSL certificate auto-provisioned)
 4. **Update wrangler.toml** routes section
-5. **Redeploy**: `wrangler publish`
+5. **Redeploy**: `wrangler deploy`
 
 See [SETUP.md](SETUP.md) for detailed instructions.
 
 ## Extending the Worker
 
-### Adding Canada Support
-1. Uncomment Canada routes in `src/index.js`
-2. Implement `handleCALookup` function
-3. Test with sample data in `data/zipcodes.ca.json`
+### Adding More Data
+```bash
+# Upload new zipcode data to R2
+wrangler r2 object put zipcity/zipcodes.us.json --file=data/zipcodes.us.json
+wrangler r2 object put zipcity/zipcodes.ca.json --file=data/zipcodes.ca.json
 
-### Migrating to KV Storage
+# Data is automatically loaded from R2 on each request
+```
+
+### Migrating to KV Storage (Alternative)
+For faster lookups with pre-indexed data:
 ```bash
 # Create KV namespace
-wrangler kv:namespace create "ZIP_US"
+wrangler kv namespace create "ZIP_US"
 
 # Update wrangler.toml with KV binding
 # Modify worker code to use env.ZIP_US.get()
-```
-
-### Migrating to R2 Storage
-```bash
-# Create R2 bucket
-wrangler r2 bucket create zip-city-data
-
-# Upload JSON files
-wrangler r2 object put zip-city-data/zipcodes.us.json --file=data/zipcodes.us.json
 ```
 
 See [SETUP.md](SETUP.md) for complete migration guides.
@@ -113,22 +120,22 @@ See [SETUP.md](SETUP.md) for complete migration guides.
 ## Testing
 
 ```bash
-# Run test suite
+# Run test suite (tests both US and Canada endpoints)
 ./test.sh
 
 # Manual testing
 curl -s "http://localhost:8787/api/us?city=Burlington&state=WI"
+curl -s "http://localhost:8787/api/ca?city=Toronto&province=ON"
 curl -s "http://localhost:8787/api/us?city=Chicago&state=IL"
-curl -s "http://localhost:8787/api/us?city=Austin&state=TX"
 ```
 
 ## Performance Notes
 
-- **Static JSON**: Fast cold starts, larger bundle size
-- **KV Storage**: Smaller bundles, network latency per lookup
-- **R2 Storage**: Best for large datasets, requires runtime parsing
+- **R2 Storage**: Excellent for large datasets, small memory footprint, easy updates
+- **KV Storage**: Faster lookups for frequently accessed data, good for pre-indexed lookups
+- **Edge Caching**: Responses cached at Cloudflare edge for improved performance
 
-Choose based on your data size and update frequency requirements.
+Current implementation uses R2 storage for optimal balance of performance and maintainability.
 
 ## License
 

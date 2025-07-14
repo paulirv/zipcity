@@ -3,8 +3,9 @@ name = "zip-city-lookup"
 main = "src/index.js"
 compatibility_date = "2025-07-14"
 
-# Workers KV namespaces (optional - for future migration from static JSON)
+# Workers KV namespaces (optional - for future migration from R2)
 # Uncomment and configure when migrating to KV storage:
+# Create with: wrangler kv namespace create "ZIP_US"
 # [[kv_namespaces]]
 # binding = "ZIP_US"
 # id = "your-us-zipcode-kv-namespace-id"
@@ -15,17 +16,17 @@ compatibility_date = "2025-07-14"
 # id = "your-ca-zipcode-kv-namespace-id"
 # preview_id = "your-ca-zipcode-preview-kv-namespace-id"
 
-# R2 bucket bindings (optional - for future migration to R2 storage)
-# Uncomment and configure when migrating to R2:
-# [[r2_buckets]]
-# binding = "ZIP_DATA"
-# bucket_name = "zip-city-data"
+# R2 bucket bindings (currently active)
+# Created with: wrangler r2 bucket create zipcity
+[[r2_buckets]]
+binding = "ZIP_DATA"
+bucket_name = "zipcity"
 
 # Custom domain routing (configure after setting up DNS)
 # Uncomment and modify after setting up zipcity.iwpi.com:
-[[routes]]
-pattern = "zipcity.iwpi.com/api/*"
-zone_name = "iwpi.com"
+# [[routes]]
+# pattern = "zipcity.iwpi.com/api/*"
+# zone_name = "iwpi.com"
 
 [vars]
 # Environment variables (if needed)

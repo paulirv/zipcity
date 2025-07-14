@@ -1,4 +1,4 @@
-# Zip-City Lookup Setup Guide
+# Zip-City Lookup Setup Guide (R2 Storage)
 
 ## Quick Start
 
@@ -7,28 +7,39 @@
 npm install
 ```
 
-### 2. Development
+### 2. R2 Bucket Setup (Already Configured)
+Your `wrangler.toml` is already configured with the R2 bucket bind2. **Worker not responding**
+   - Check `wrangler dev` output for errors
+   - Verify wrangler.toml configuration:
+```toml
+[[r2_buckets]]
+binding = "ZIP_DATA"
+bucket_name = "zipcity"
+```
+
+### 3. Development
 ```bash
 # Run locally with Wrangler
 npm run dev
 
 # Or directly with wrangler
-wrangler dev --local
+wrangler dev
 ```
 
-### 3. Test the API
+### 4. Test the API
 ```bash
-# Run the test script
+# Run the test script (tests both US and Canada)
 ./test.sh
 
 # Or manually test with curl
 curl -s "http://localhost:8787/api/us?city=Burlington&state=WI"
+curl -s "http://localhost:8787/api/ca?city=Toronto&province=ON"
 ```
 
-### 4. Deploy to Cloudflare
+### 5. Deploy to Cloudflare
 ```bash
 # Login to Cloudflare (if not already)
-wrangler auth login
+wrangler login
 
 # Deploy the worker
 npm run deploy
@@ -69,65 +80,107 @@ npm run deploy
 
 5. **Redeploy**
    ```bash
-   wrangler publish
+   wrangler deploy
    ```
 
 ### Verification
 ```bash
-# Test the custom domain
+# Test the custom domain with both endpoints
 curl -s "https://zipcity.iwpi.com/api/us?city=Burlington&state=WI"
+curl -s "https://zipcity.iwpi.com/api/ca?city=Toronto&province=ON"
 ```
 
-## Migration to Cloudflare KV (Future)
+## Managing R2 Data (Current Implementation)
 
-### 1. Create KV Namespace
+### Uploading New Data
+```bash
+# Update US zipcode data
+wrangler r2 object put zipcity/zipcodes.us.json --file=data/zipcodes.us.json
+
+# Update Canada postal code data  
+wrangler r2 object put zipcity/zipcodes.ca.json --file=data/zipcodes.ca.json
+
+# List objects in bucket
+wrangler r2 object list zipcity
+```
+
+### Data Format
+The JSON files should follow this structure:
+
+**US Data (zipcodes.us.json):**
+```json
+[
+  {
+    "country_code": "US",
+    "zipcode": "53105", 
+    "place": "Burlington",
+    "state": "Wisconsin",
+    "state_code": "WI",
+    "county": "Racine",
+    "latitude": "42.6847",
+    "longitude": "-88.2787"
+  }
+]
+```
+
+**Canada Data (zipcodes.ca.json):**
+```json
+[
+  {
+    "country_code": "CA",
+    "postal_code": "M5H 2N2",
+    "place": "Toronto", 
+    "province": "Ontario",
+    "province_code": "ON",
+    "latitude": "43.6532",
+    "longitude": "-79.3832"
+  }
+]
+```
+
+## Migration to Cloudflare KV (Alternative Storage)
+
+If you prefer KV storage for faster lookups:
+
+### Creating KV Namespaces
 ```bash
 # Create KV namespace for US data
-wrangler kv:namespace create "ZIP_US"
+wrangler kv namespace create "ZIP_US"
 
 # Create preview namespace
-wrangler kv:namespace create "ZIP_US" --preview
+wrangler kv namespace create "ZIP_US" --preview
+
+# Create Canada namespace (optional)
+wrangler kv namespace create "ZIP_CA"
+wrangler kv namespace create "ZIP_CA" --preview
 ```
 
-### 2. Upload Data to KV
+### Upload Data to KV
 ```bash
-# Transform and upload US zipcode data
-node scripts/upload-to-kv.js
+# Upload US data (transform JSON to key-value pairs first)
+wrangler kv key put --binding ZIP_US "WI:Burlington" '{"zipcode":"53105","place":"Burlington","state_code":"WI"}'
+
+# Bulk upload with a script would be more practical for large datasets
 ```
 
-### 3. Update wrangler.toml
-```toml
-[[kv_namespaces]]
-binding = "ZIP_US"
-id = "your-kv-namespace-id"
-preview_id = "your-preview-kv-namespace-id"
-```
+### Update Configuration
+1. Update `wrangler.toml` with the namespace IDs from the create commands
+2. Modify `src/index.js` to use `env.ZIP_US.get()` instead of R2 calls
 
-### 4. Update Worker Code
-The worker code already includes TODO comments showing where to integrate KV storage. Simply uncomment and modify the KV sections in `src/index.js`.
+### Alternative R2 Bucket Setup
 
-## Migration to Cloudflare R2 (Future)
+If you need to create a new R2 bucket:
 
-### 1. Create R2 Bucket
+### Creating R2 Bucket
 ```bash
 wrangler r2 bucket create zip-city-data
 ```
 
-### 2. Upload JSON Files
+### Uploading JSON Files
 ```bash
 wrangler r2 object put zip-city-data/zipcodes.us.json --file=data/zipcodes.us.json
 wrangler r2 object put zip-city-data/zipcodes.ca.json --file=data/zipcodes.ca.json
 ```
-
-### 3. Update wrangler.toml
-```toml
-[[r2_buckets]]
-binding = "ZIP_DATA"
-bucket_name = "zip-city-data"
-```
-
-### 4. Update Worker Code
-The worker code includes TODO comments for R2 integration.
 
 ## Adding Canada Support
 
@@ -179,7 +232,7 @@ The worker code includes TODO comments for R2 integration.
 wrangler tail
 
 # Test locally with verbose output
-wrangler dev --local --verbose
+wrangler dev --verbose
 ```
 
 ## Performance Considerations
