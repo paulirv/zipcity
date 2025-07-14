@@ -1,7 +1,7 @@
 # Cloudflare Worker configuration for Zip-City Lookup
 name = "zip-city-lookup"
 main = "src/index.js"
-compatibility_date = "2025-07-01"
+compatibility_date = "2025-07-14"
 
 # Workers KV namespaces (optional - for future migration from static JSON)
 # Uncomment and configure when migrating to KV storage:
@@ -23,9 +23,9 @@ compatibility_date = "2025-07-01"
 
 # Custom domain routing (configure after setting up DNS)
 # Uncomment and modify after setting up zipcity.iwpi.com:
-# [[routes]]
-# pattern = "zipcity.iwpi.com/api/*"
-# zone_name = "iwpi.com"
+[[routes]]
+pattern = "zipcity.iwpi.com/api/*"
+zone_name = "iwpi.com"
 
 [vars]
 # Environment variables (if needed)
