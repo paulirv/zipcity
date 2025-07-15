@@ -13,12 +13,23 @@ The zipcity Worker now includes autocomplete functionality for both US and Canad
 
 **Behavior:**
 - If query starts with numbers → ZIP code search
-- If query starts with letters → City name search
+- If query starts with letters and contains state (full or partial) → City+state search
+  - Full state: "Burlington, WI" or "Burlington WI" → Returns only Burlington, WI
+  - Partial state: "Burlington, W" or "Burlington W" → Returns Burlington in WA, WI, WV, WY
+- If query starts with letters without state → City name search (returns all matching cities)
 
 **Examples:**
 ```bash
-# City name search
+# City name search (returns all Burlington cities)
 curl "https://zipcity.iwpi.com/api/autocomplete/us?q=Burli&limit=5"
+
+# Specific city + state search (exact match)
+curl "https://zipcity.iwpi.com/api/autocomplete/us?q=Burlington,%20WI&limit=5"
+curl "https://zipcity.iwpi.com/api/autocomplete/us?q=Burlington%20WI&limit=5"
+
+# Partial state search (multiple matches)
+curl "https://zipcity.iwpi.com/api/autocomplete/us?q=Burlington,%20W&limit=10"
+curl "https://zipcity.iwpi.com/api/autocomplete/us?q=Burlington%20W&limit=10"
 
 # ZIP code search  
 curl "https://zipcity.iwpi.com/api/autocomplete/us?q=0540&limit=5"
@@ -33,12 +44,19 @@ curl "https://zipcity.iwpi.com/api/autocomplete/us?q=0540&limit=5"
 
 **Behavior:**
 - If query starts with numbers → Postal code search
-- If query starts with letters → City name search
+- If query starts with letters and contains province (full or partial) → City+province search
+  - Full province: "Toronto, ON" or "Toronto ON" → Returns only Toronto, ON
+  - Partial province: "Toronto, O" or "Toronto O" → Returns Toronto in ON, etc.
+- If query starts with letters without province → City name search (returns all matching cities)
 
 **Examples:**
 ```bash
-# City name search
+# City name search (returns all Toronto cities)
 curl "https://zipcity.iwpi.com/api/autocomplete/ca?q=Toro&limit=3"
+
+# Specific city + province search
+curl "https://zipcity.iwpi.com/api/autocomplete/ca?q=Toronto,%20ON&limit=3"
+curl "https://zipcity.iwpi.com/api/autocomplete/ca?q=Toronto%20ON&limit=3"
 
 # Postal code search
 curl "https://zipcity.iwpi.com/api/autocomplete/ca?q=M5A&limit=5"
@@ -92,7 +110,9 @@ curl "https://zipcity.iwpi.com/api/autocomplete/ca?q=M5A&limit=5"
 
 #### 2. Detect Input Type
 The API automatically detects whether the user is searching for:
-- **City names** (letters) → Returns city suggestions
+- **City names** (letters only) → Returns all matching cities across states
+- **Specific City + State** (letters + 2-letter state code) → Returns exact city/state match
+  - Supports both formats: "Burlington, WI" and "Burlington WI"
 - **ZIP codes** (numbers) → Returns ZIP code suggestions
 
 #### 3. JavaScript Implementation Example

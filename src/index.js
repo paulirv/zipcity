@@ -283,6 +283,10 @@ async function handleCALookup(request, env) {
  * Handle US autocomplete for city names and ZIP codes
  * Expected query params: q, limit
  * Example: /api/autocomplete/us?q=bur&limit=10
+ * Example: /api/autocomplete/us?q=Burlington, WI&limit=10
+ * Example: /api/autocomplete/us?q=Burlington WI&limit=10
+ * Example: /api/autocomplete/us?q=Burlington W&limit=10 (partial state)
+ * Supports city name search, city+state search (full/partial), and ZIP code search
  */
 async function handleUSAutocomplete(request, env) {
   const url = new URL(request.url);
@@ -372,6 +376,10 @@ async function handleUSAutocomplete(request, env) {
  * Handle Canada autocomplete for city names and postal codes
  * Expected query params: q, limit
  * Example: /api/autocomplete/ca?q=tor&limit=10
+ * Example: /api/autocomplete/ca?q=Toronto, ON&limit=10
+ * Example: /api/autocomplete/ca?q=Toronto ON&limit=10
+ * Example: /api/autocomplete/ca?q=Toronto O&limit=10 (partial province)
+ * Supports city name search, city+province search (full/partial), and postal code search
  */
 async function handleCAAutocomplete(request, env) {
   const url = new URL(request.url);
@@ -509,7 +517,7 @@ function getCORSHeaders() {
 
 /**
  * Perform autocomplete search on the data
- * Supports both city name search and ZIP/postal code search
+ * Supports city name search, city+state search, and ZIP/postal code search
  * @param {Array} data - The zipcode/postal code data array
  * @param {string} query - The search query
  * @param {number} limit - Maximum number of results to return
@@ -517,7 +525,7 @@ function getCORSHeaders() {
  * @returns {Array} Array of matching results
  */
 function performAutocomplete(data, query, limit, isCanada = false) {
-  const queryLower = query.toLowerCase();
+  const queryLower = query.toLowerCase().trim();
   const isNumericQuery = /^\d+/.test(query); // Check if query starts with numbers
   
   let matches = [];
@@ -543,23 +551,61 @@ function performAutocomplete(data, query, limit, isCanada = false) {
       .slice(0, limit);
   } else {
     // City name search - query is letters
-    for (const item of data) {
-      if (matches.length >= limit) break;
+    // Check if query contains city and state (e.g., "burlington, wi", "burlington wi", "burlington w", "burlington, w")
+    const cityStateMatch = queryLower.match(/^([^,\s]+(?:\s+[^,\s]+)*)[,\s]+([a-z]{1,2})$/);
+    
+    if (cityStateMatch) {
+      // User entered city + state combination (full or partial state)
+      const [, cityQuery, stateQuery] = cityStateMatch;
+      const cityQueryTrimmed = cityQuery.trim();
+      const stateQueryTrimmed = stateQuery.trim();
       
-      const cityName = item.place || '';
-      const cityKey = `${cityName.toLowerCase()},${item.state_code?.toLowerCase()}`;
-      
-      // Check if city name starts with query and we haven't seen this city/state combo
-      if (cityName.toLowerCase().startsWith(queryLower) && !seenCities.has(cityKey)) {
-        seenCities.add(cityKey);
-        matches.push({
-          type: 'city',
-          display: `${item.place}, ${item.state_code}`,
-          value: `${item.place}, ${item.state_code}`,
-          city: item.place,
-          state: item.state_code,
-          zipcode: item.zipcode
-        });
+      for (const item of data) {
+        if (matches.length >= limit) break;
+        
+        const cityName = item.place || '';
+        const stateCode = item.state_code || '';
+        const cityKey = `${cityName.toLowerCase()},${stateCode.toLowerCase()}`;
+        
+        // Match both city and state (exact match for 2-letter codes, prefix match for 1-letter codes)
+        const stateMatches = stateQueryTrimmed.length === 2 
+          ? stateCode.toLowerCase() === stateQueryTrimmed
+          : stateCode.toLowerCase().startsWith(stateQueryTrimmed);
+          
+        if (cityName.toLowerCase().startsWith(cityQueryTrimmed) && 
+            stateMatches && 
+            !seenCities.has(cityKey)) {
+          seenCities.add(cityKey);
+          matches.push({
+            type: 'city',
+            display: `${item.place}, ${item.state_code}`,
+            value: `${item.place}, ${item.state_code}`,
+            city: item.place,
+            state: item.state_code,
+            zipcode: item.zipcode
+          });
+        }
+      }
+    } else {
+      // Regular city name search without state
+      for (const item of data) {
+        if (matches.length >= limit) break;
+        
+        const cityName = item.place || '';
+        const cityKey = `${cityName.toLowerCase()},${item.state_code?.toLowerCase()}`;
+        
+        // Check if city name starts with query and we haven't seen this city/state combo
+        if (cityName.toLowerCase().startsWith(queryLower) && !seenCities.has(cityKey)) {
+          seenCities.add(cityKey);
+          matches.push({
+            type: 'city',
+            display: `${item.place}, ${item.state_code}`,
+            value: `${item.place}, ${item.state_code}`,
+            city: item.place,
+            state: item.state_code,
+            zipcode: item.zipcode
+          });
+        }
       }
     }
   }

@@ -7,10 +7,19 @@
 2. **Canada Autocomplete**: `GET /api/autocomplete/ca?q=<query>&limit=<limit>`
 
 ### Smart Search Logic
-- **City Name Search**: When query starts with letters (e.g., "Burli")
-  - Returns: `Burlington, IA`, `Burlington, VT`, `Burlington, WI`
-  - Deduplicates city/state combinations
-  - Sorted alphabetically
+- **City Name Search**: When query is just letters (e.g., "Burli")
+  - Returns: `Burlington, IA`, `Burlington, VT`, `Burlington, WI`, etc.
+  - Shows all cities with that name across all states
+
+- **Specific City + State Search**: When query includes full state code (e.g., "Burlington, WI" or "Burlington WI")
+  - Returns: Only `Burlington, WI`
+  - Supports both comma and space separators
+  - Works with partial city names: "Burli WI" → `Burlington, WI`
+
+- **Partial State Search**: When query includes partial state code (e.g., "Burlington, W" or "Burlington W")
+  - Returns: `Burlington, WA`, `Burlington, WI`, `Burlington, WV`, `Burlington, WY`
+  - Great for exploring options when user isn't sure of exact state code
+  - Works with partial city names: "Burli W" → All Burlington cities in W states
 
 - **ZIP Code Search**: When query starts with numbers (e.g., "0540")
   - Returns: `05401 - Burlington, VT`, `05402 - Burlington, VT`
@@ -56,15 +65,20 @@ const data = await response.json();
 
 ### Key Benefits
 - **Automatic Detection**: No need to specify search type
-- **Unified Interface**: Same API for both cities and ZIP codes  
+- **Flexible City Search**: Search by city only OR city + state (full or partial)
+- **Progressive Refinement**: "burli" → "burli w" → "burli wi" for narrowing results
+- **Multiple Input Formats**: Supports "City, ST" and "City ST" formats
+- **Unified Interface**: Same API for all search types
 - **Rich Data**: Get city, state, and ZIP in every response
 - **Performance**: Fast search with configurable result limits
 - **CORS Enabled**: Works from any domain
 
 ### Live Testing URLs
 - City search: `https://zipcity.iwpi.com/api/autocomplete/us?q=Burli&limit=5`
+- Specific city+state: `https://zipcity.iwpi.com/api/autocomplete/us?q=Burlington,%20WI&limit=5`
+- Partial state search: `https://zipcity.iwpi.com/api/autocomplete/us?q=Burlington,%20W&limit=10`
 - ZIP search: `https://zipcity.iwpi.com/api/autocomplete/us?q=0540&limit=5`
-- Canada: `https://zipcity.iwpi.com/api/autocomplete/ca?q=Toro&limit=5`
+- Canada: `https://zipcity.iwpi.com/api/autocomplete/ca?q=Toronto,%20O&limit=5`
 
 ## Next Steps for Nanawall Team
 
