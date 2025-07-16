@@ -1,7 +1,7 @@
 # Cloudflare Worker configuration for Zip-City Lookup
 name = "zip-city-lookup"
 main = "src/index.js"
-compatibility_date = "2025-07-14"
+compatibility_date = "2025-07-16"
 
 # Workers KV namespaces (optional - for future migration from R2)
 # Uncomment and configure when migrating to KV storage:

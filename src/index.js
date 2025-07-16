@@ -9,6 +9,7 @@
  * - GET /api/ca?city=<city>&province=<province> - Canada postal code lookup
  * - GET /api/autocomplete/us?q=<query>&limit=<limit> - US autocomplete for cities/zips
  * - GET /api/autocomplete/ca?q=<query>&limit=<limit> - Canada autocomplete for cities/postal codes
+ * - GET /api/autocomplete/mx?q=<query>&limit=<limit> - Mexico autocomplete for states/postal codes
  * 
  * Custom Domain Setup:
  * 1. Add DNS CNAME: zipcity.iwpi.com -> your-worker.your-subdomain.workers.dev
@@ -42,6 +43,10 @@ export default {
       return handleCAAutocomplete(request, env);
     }
     
+    if (pathname.startsWith('/api/autocomplete/mx')) {
+      return handleMXAutocomplete(request, env);
+    }
+    
     // Route handling
     if (pathname.startsWith('/api/us')) {
       return handleUSLookup(request, env);
@@ -60,7 +65,8 @@ export default {
           '/api/us?city=<city>&state=<state>',
           '/api/ca?city=<city>&province=<province>',
           '/api/autocomplete/us?q=<query>&limit=<limit>',
-          '/api/autocomplete/ca?q=<query>&limit=<limit>'
+          '/api/autocomplete/ca?q=<query>&limit=<limit>',
+          '/api/autocomplete/mx?q=<query>&limit=<limit>'
         ]
       }), 
       {
@@ -466,6 +472,98 @@ async function handleCAAutocomplete(request, env) {
 }
 
 /**
+ * Handle Mexico autocomplete for state names and postal codes
+ * Expected query params: q, limit
+ * Example: /api/autocomplete/mx?q=agu&limit=10
+ * Example: /api/autocomplete/mx?q=Aguascalientes&limit=10
+ * Example: /api/autocomplete/mx?q=20000&limit=10 (postal code search)
+ * Supports state name search and postal code search
+ */
+async function handleMXAutocomplete(request, env) {
+  const url = new URL(request.url);
+  const query = url.searchParams.get('q');
+  const limit = parseInt(url.searchParams.get('limit')) || 10;
+  
+  // Validate required parameters
+  if (!query || query.length < 3) {
+    return new Response(
+      JSON.stringify({ 
+        error: 'Query parameter "q" is required and must be at least 3 characters',
+        example: '/api/autocomplete/mx?q=Agu&limit=10'
+      }), 
+      {
+        status: 400,
+        headers: {
+          'Content-Type': 'application/json',
+          ...getCORSHeaders()
+        }
+      }
+    );
+  }
+  
+  // Load Mexico postal code data from R2 storage
+  try {
+    let zipcodesMX;
+    
+    // Try R2 binding first
+    if (env.ZIP_DATA) {
+      try {
+        const object = await env.ZIP_DATA.get('zipcodes.mx.json');
+        if (object) {
+          zipcodesMX = await object.json();
+        }
+      } catch (error) {
+        console.log('R2 binding failed for Mexico data:', error.message);
+      }
+    }
+    
+    // Fallback to public URL if R2 binding failed or no data found
+    if (!zipcodesMX) {
+      console.log('Using public URL fallback for Mexico data');
+      const response = await fetch('https://pub-522895a2a41b453ab908b4e31d9e627a.r2.dev/zipcodes.mx.json');
+      if (!response.ok) {
+        throw new Error(`Failed to fetch Mexico data from public URL: ${response.status}`);
+      }
+      zipcodesMX = await response.json();
+    }
+    
+    // Perform autocomplete search
+    const results = performAutocomplete(zipcodesMX, query, limit, false, true);
+    
+    // Return successful result
+    return new Response(
+      JSON.stringify({
+        query: query,
+        results: results,
+        count: results.length
+      }), 
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          ...getCORSHeaders()
+        }
+      }
+    );
+    
+  } catch (error) {
+    return new Response(
+      JSON.stringify({ 
+        error: 'Failed to load postal code data',
+        details: error.message 
+      }), 
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          ...getCORSHeaders()
+        }
+      }
+    );
+  }
+}
+
+/**
  * Find zipcode in data array with case-insensitive matching
  */
 function findZipcode(data, city, state) {
@@ -522,9 +620,10 @@ function getCORSHeaders() {
  * @param {string} query - The search query
  * @param {number} limit - Maximum number of results to return
  * @param {boolean} isCanada - Whether this is Canadian data (affects field names)
+ * @param {boolean} isMexico - Whether this is Mexican data (affects field names and search behavior)
  * @returns {Array} Array of matching results
  */
-function performAutocomplete(data, query, limit, isCanada = false) {
+function performAutocomplete(data, query, limit, isCanada = false, isMexico = false) {
   const queryLower = query.toLowerCase().trim();
   const isNumericQuery = /^\d+/.test(query); // Check if query starts with numbers
   
@@ -532,7 +631,7 @@ function performAutocomplete(data, query, limit, isCanada = false) {
   const maxLimit = Math.min(limit, 50);
   
   let matches = [];
-  const seenCities = new Set(); // To avoid duplicate city names
+  const seenItems = new Set(); // To avoid duplicates
   
   if (isNumericQuery) {
     // ZIP/Postal code search - query starts with numbers
@@ -541,15 +640,40 @@ function performAutocomplete(data, query, limit, isCanada = false) {
       const code = item.zipcode || '';
       
       if (code.toLowerCase().startsWith(queryLower)) {
+        const displayValue = isMexico 
+          ? `${item.zipcode} - ${item.place}, ${item.state}`
+          : isCanada 
+            ? `${item.zipcode} - ${item.place}, ${item.state_code}`
+            : `${item.zipcode} - ${item.place}, ${item.state_code}`;
+            
         matches.push({
           type: 'zipcode',
-          display: isCanada 
-            ? `${item.zipcode} - ${item.place}, ${item.state_code}`
-            : `${item.zipcode} - ${item.place}, ${item.state_code}`,
+          display: displayValue,
           value: item.zipcode,
           city: item.place,
-          state: item.state_code,
+          state: isMexico ? item.state : item.state_code,
           zipcode: item.zipcode
+        });
+      }
+    }
+  } else if (isMexico) {
+    // Mexico state search - search against the 'state' field
+    for (let i = 0; i < data.length && matches.length < maxLimit; i++) {
+      const item = data[i];
+      const stateName = item.state || '';
+      const stateKey = stateName.toLowerCase();
+      
+      // Check if state name matches with word boundaries
+      const stateMatches = matchesWithWordBoundary(stateName.toLowerCase(), queryLower);
+      
+      if (stateMatches && !seenItems.has(stateKey)) {
+        seenItems.add(stateKey);
+        matches.push({
+          type: 'state',
+          display: item.state,
+          value: item.state,
+          state: item.state,
+          state_code: item.state_code
         });
       }
     }
@@ -574,8 +698,8 @@ function performAutocomplete(data, query, limit, isCanada = false) {
           // Check if state matches (exact for full codes, prefix for partial)
           const stateMatches = stateCode.toLowerCase().startsWith(statePart);
           
-          if (cityMatches && stateMatches && !seenCities.has(cityKey)) {
-            seenCities.add(cityKey);
+          if (cityMatches && stateMatches && !seenItems.has(cityKey)) {
+            seenItems.add(cityKey);
             matches.push({
               type: 'city',
               display: `${item.place}, ${item.state_code}`,
@@ -598,8 +722,8 @@ function performAutocomplete(data, query, limit, isCanada = false) {
         // Check if city name matches with word boundaries for multi-word cities
         const cityMatches = matchesWithWordBoundary(cityName.toLowerCase(), queryLower);
         
-        if (cityMatches && !seenCities.has(cityKey)) {
-          seenCities.add(cityKey);
+        if (cityMatches && !seenItems.has(cityKey)) {
+          seenItems.add(cityKey);
           matches.push({
             type: 'city',
             display: `${item.place}, ${item.state_code}`,
