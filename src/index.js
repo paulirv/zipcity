@@ -528,27 +528,31 @@ function performAutocomplete(data, query, limit, isCanada = false) {
   const queryLower = query.toLowerCase().trim();
   const isNumericQuery = /^\d+/.test(query); // Check if query starts with numbers
   
+  // Cap the limit to prevent excessive processing
+  const maxLimit = Math.min(limit, 50);
+  
   let matches = [];
   const seenCities = new Set(); // To avoid duplicate city names
   
   if (isNumericQuery) {
     // ZIP/Postal code search - query starts with numbers
-    matches = data
-      .filter(item => {
-        const code = item.zipcode || '';
-        return code.toLowerCase().startsWith(queryLower);
-      })
-      .map(item => ({
-        type: 'zipcode',
-        display: isCanada 
-          ? `${item.zipcode} - ${item.place}, ${item.state_code}`
-          : `${item.zipcode} - ${item.place}, ${item.state_code}`,
-        value: item.zipcode,
-        city: item.place,
-        state: item.state_code,
-        zipcode: item.zipcode
-      }))
-      .slice(0, limit);
+    for (let i = 0; i < data.length && matches.length < maxLimit; i++) {
+      const item = data[i];
+      const code = item.zipcode || '';
+      
+      if (code.toLowerCase().startsWith(queryLower)) {
+        matches.push({
+          type: 'zipcode',
+          display: isCanada 
+            ? `${item.zipcode} - ${item.place}, ${item.state_code}`
+            : `${item.zipcode} - ${item.place}, ${item.state_code}`,
+          value: item.zipcode,
+          city: item.place,
+          state: item.state_code,
+          zipcode: item.zipcode
+        });
+      }
+    }
   } else {
     // City name search - query is letters
     // Check if query contains city and state (e.g., "burlington, wi", "burlington wi", "burlington w", "burlington, w")
@@ -560,9 +564,8 @@ function performAutocomplete(data, query, limit, isCanada = false) {
       const cityQueryTrimmed = cityQuery.trim();
       const stateQueryTrimmed = stateQuery.trim();
       
-      for (const item of data) {
-        if (matches.length >= limit) break;
-        
+      for (let i = 0; i < data.length && matches.length < maxLimit; i++) {
+        const item = data[i];
         const cityName = item.place || '';
         const stateCode = item.state_code || '';
         const cityKey = `${cityName.toLowerCase()},${stateCode.toLowerCase()}`;
@@ -588,9 +591,8 @@ function performAutocomplete(data, query, limit, isCanada = false) {
       }
     } else {
       // Regular city name search without state
-      for (const item of data) {
-        if (matches.length >= limit) break;
-        
+      for (let i = 0; i < data.length && matches.length < maxLimit; i++) {
+        const item = data[i];
         const cityName = item.place || '';
         const cityKey = `${cityName.toLowerCase()},${item.state_code?.toLowerCase()}`;
         
