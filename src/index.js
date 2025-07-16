@@ -555,49 +555,50 @@ function performAutocomplete(data, query, limit, isCanada = false) {
     }
   } else {
     // City name search - query is letters
-    // Check if query contains city and state (e.g., "burlington, wi", "burlington wi", "burlington w", "burlington, w")
-    const cityStateMatch = queryLower.match(/^([^,\s]+(?:\s+[^,\s]+)*)[,\s]+([a-z]{1,2})$/);
+    // Check for comma separation first
+    const hasComma = queryLower.includes(',');
     
-    if (cityStateMatch) {
-      // User entered city + state combination (full or partial state)
-      const [, cityQuery, stateQuery] = cityStateMatch;
-      const cityQueryTrimmed = cityQuery.trim();
-      const stateQueryTrimmed = stateQuery.trim();
+    if (hasComma) {
+      // User entered city + state combination with comma (e.g., "coos, o", "coos b, or")
+      const [cityPart, statePart] = queryLower.split(',').map(s => s.trim());
       
+      if (cityPart && statePart) {
+        for (let i = 0; i < data.length && matches.length < maxLimit; i++) {
+          const item = data[i];
+          const cityName = item.place || '';
+          const stateCode = item.state_code || '';
+          const cityKey = `${cityName.toLowerCase()},${stateCode.toLowerCase()}`;
+          
+          // Check if city matches with word boundaries for multi-word cities
+          const cityMatches = matchesWithWordBoundary(cityName.toLowerCase(), cityPart);
+          // Check if state matches (exact for full codes, prefix for partial)
+          const stateMatches = stateCode.toLowerCase().startsWith(statePart);
+          
+          if (cityMatches && stateMatches && !seenCities.has(cityKey)) {
+            seenCities.add(cityKey);
+            matches.push({
+              type: 'city',
+              display: `${item.place}, ${item.state_code}`,
+              value: `${item.place}, ${item.state_code}`,
+              city: item.place,
+              state: item.state_code,
+              zipcode: item.zipcode
+            });
+          }
+        }
+      }
+    } else {
+      // No comma - city only search with word boundary matching
       for (let i = 0; i < data.length && matches.length < maxLimit; i++) {
         const item = data[i];
         const cityName = item.place || '';
         const stateCode = item.state_code || '';
         const cityKey = `${cityName.toLowerCase()},${stateCode.toLowerCase()}`;
         
-        // Match both city and state (exact match for 2-letter codes, prefix match for 1-letter codes)
-        const stateMatches = stateQueryTrimmed.length === 2 
-          ? stateCode.toLowerCase() === stateQueryTrimmed
-          : stateCode.toLowerCase().startsWith(stateQueryTrimmed);
-          
-        if (cityName.toLowerCase().startsWith(cityQueryTrimmed) && 
-            stateMatches && 
-            !seenCities.has(cityKey)) {
-          seenCities.add(cityKey);
-          matches.push({
-            type: 'city',
-            display: `${item.place}, ${item.state_code}`,
-            value: `${item.place}, ${item.state_code}`,
-            city: item.place,
-            state: item.state_code,
-            zipcode: item.zipcode
-          });
-        }
-      }
-    } else {
-      // Regular city name search without state
-      for (let i = 0; i < data.length && matches.length < maxLimit; i++) {
-        const item = data[i];
-        const cityName = item.place || '';
-        const cityKey = `${cityName.toLowerCase()},${item.state_code?.toLowerCase()}`;
+        // Check if city name matches with word boundaries for multi-word cities
+        const cityMatches = matchesWithWordBoundary(cityName.toLowerCase(), queryLower);
         
-        // Check if city name starts with query and we haven't seen this city/state combo
-        if (cityName.toLowerCase().startsWith(queryLower) && !seenCities.has(cityKey)) {
+        if (cityMatches && !seenCities.has(cityKey)) {
           seenCities.add(cityKey);
           matches.push({
             type: 'city',
@@ -616,4 +617,30 @@ function performAutocomplete(data, query, limit, isCanada = false) {
   matches.sort((a, b) => a.display.localeCompare(b.display));
   
   return matches;
+}
+
+/**
+ * Check if a full name matches a query with word boundary matching
+ * Supports multi-word matching where each word in query must match word boundaries in the full name
+ * @param {string} fullName - The full name to check (e.g., "coos bay")
+ * @param {string} query - The query to match (e.g., "coos b")
+ * @returns {boolean} True if query matches with word boundaries
+ */
+function matchesWithWordBoundary(fullName, query) {
+  const queryWords = query.split(/\s+/);
+  const nameWords = fullName.split(/\s+/);
+  
+  // Each query word must match a corresponding name word from the beginning
+  for (let i = 0; i < queryWords.length; i++) {
+    if (i >= nameWords.length) {
+      return false; // More query words than name words
+    }
+    
+    // Each query word must be a prefix of the corresponding name word
+    if (!nameWords[i].startsWith(queryWords[i])) {
+      return false;
+    }
+  }
+  
+  return true;
 }
