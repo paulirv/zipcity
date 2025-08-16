@@ -2,7 +2,7 @@
  * Cloudflare Worker: Zip-City Lookup
  * 
  * Provides ZIP code lookup for US cities with extensible support for Canada.
- * Data is stored in Cloudflare R2 bucket for scalable storage and easy updates.
+ * Data is stored in Cloudflare D1 database for fast SQL queries.
  * 
  * Routes:
  * - GET /api/us?city=<city>&state=<state> - US ZIP lookup
@@ -18,8 +18,8 @@
  * 4. Uncomment the [[routes]] section in wrangler.toml
  */
 
-// R2 storage is now used instead of bundled JSON files
-// Data is loaded dynamically from the ZIP_DATA R2 bucket
+// D1 database is now used for US and CA data instead of R2 JSON files
+// Mexico data still uses R2 storage until migrated
 
 /**
  * Main Worker request handler
@@ -52,7 +52,7 @@ export default {
       return handleUSLookup(request, env);
     }
     
-    // Canada route - now available with R2 storage
+    // Canada route - now available with D1 database
     if (pathname.startsWith('/api/ca')) {
       return handleCALookup(request, env);
     }
@@ -107,34 +107,21 @@ async function handleUSLookup(request, env) {
       }
     );
   }
-   // Load US zipcode data from R2 storage
+
   try {
-    let zipcodesUS;
-    
-    // Try R2 binding first
-    if (env.ZIP_DATA) {
-      try {
-        const object = await env.ZIP_DATA.get('zipcodes.us.json');
-        if (object) {
-          zipcodesUS = await object.json();
-        }
-      } catch (error) {
-        console.log('R2 binding failed:', error.message);
-      }
+    // Query D1 database for US zipcode data
+    if (!env.DB) {
+      throw new Error('Database binding not available');
     }
+
+    const stmt = env.DB.prepare(`
+      SELECT place, state_code, zipcode 
+      FROM us_zipcodes 
+      WHERE LOWER(place) = LOWER(?) AND LOWER(state_code) = LOWER(?)
+      LIMIT 1
+    `);
     
-    // Fallback to public URL if R2 binding failed or no data found
-    if (!zipcodesUS) {
-      console.log('Using public URL fallback for US data');
-      const response = await fetch('https://pub-522895a2a41b453ab908b4e31d9e627a.r2.dev/zipcodes.us.json');
-      if (!response.ok) {
-        throw new Error(`Failed to fetch from public URL: ${response.status}`);
-      }
-      zipcodesUS = await response.json();
-    }
-    
-    // Perform case-insensitive lookup in R2 data
-    const result = findZipcode(zipcodesUS, city, state);
+    const result = await stmt.bind(city, state).first();
     
     if (!result) {
       return new Response(
@@ -168,7 +155,7 @@ async function handleUSLookup(request, env) {
   } catch (error) {
     return new Response(
       JSON.stringify({ 
-        error: 'Failed to load zipcode data',
+        error: 'Failed to query zipcode data',
         details: error.message 
       }), 
       {
@@ -210,34 +197,20 @@ async function handleCALookup(request, env) {
     );
   }
   
-  // Load Canada postal code data from R2 storage
   try {
-    let zipcodesCA;
-    
-    // Try R2 binding first
-    if (env.ZIP_DATA) {
-      try {
-        const object = await env.ZIP_DATA.get('zipcodes.ca.json');
-        if (object) {
-          zipcodesCA = await object.json();
-        }
-      } catch (error) {
-        console.log('R2 binding failed for Canada data:', error.message);
-      }
+    // Query D1 database for Canada postal code data
+    if (!env.DB) {
+      throw new Error('Database binding not available');
     }
+
+    const stmt = env.DB.prepare(`
+      SELECT place, state_code, zipcode 
+      FROM ca_zipcodes 
+      WHERE LOWER(place) = LOWER(?) AND LOWER(state_code) = LOWER(?)
+      LIMIT 1
+    `);
     
-    // Fallback to public URL if R2 binding failed or no data found
-    if (!zipcodesCA) {
-      console.log('Using public URL fallback for Canada data');
-      const response = await fetch('https://pub-522895a2a41b453ab908b4e31d9e627a.r2.dev/zipcodes.ca.json');
-      if (!response.ok) {
-        throw new Error(`Failed to fetch Canada data from public URL: ${response.status}`);
-      }
-      zipcodesCA = await response.json();
-    }
-    
-    // Perform case-insensitive lookup in R2 data
-    const result = findPostalCode(zipcodesCA, city, province);
+    const result = await stmt.bind(city, province).first();
     
     if (!result) {
       return new Response(
@@ -271,7 +244,7 @@ async function handleCALookup(request, env) {
   } catch (error) {
     return new Response(
       JSON.stringify({ 
-        error: 'Failed to load postal code data',
+        error: 'Failed to query postal code data',
         details: error.message 
       }), 
       {
@@ -319,34 +292,13 @@ async function handleUSAutocomplete(request, env) {
   // Cap limit to prevent excessive processing
   const cappedLimit = Math.min(limit, 25);
   
-  // Load US zipcode data from R2 storage
   try {
-    let zipcodesUS;
-    
-    // Try R2 binding first
-    if (env.ZIP_DATA) {
-      try {
-        const object = await env.ZIP_DATA.get('zipcodes.us.json');
-        if (object) {
-          zipcodesUS = await object.json();
-        }
-      } catch (error) {
-        console.log('R2 binding failed:', error.message);
-      }
+    // Query D1 database for US autocomplete
+    if (!env.DB) {
+      throw new Error('Database binding not available');
     }
-    
-    // Fallback to public URL if R2 binding failed or no data found
-    if (!zipcodesUS) {
-      console.log('Using public URL fallback for US data');
-      const response = await fetch('https://pub-522895a2a41b453ab908b4e31d9e627a.r2.dev/zipcodes.us.json');
-      if (!response.ok) {
-        throw new Error(`Failed to fetch from public URL: ${response.status}`);
-      }
-      zipcodesUS = await response.json();
-    }
-    
-    // Perform autocomplete search with timeout protection
-    const results = await performAutocompleteWithTimeout(zipcodesUS, query, cappedLimit);
+
+    const results = await performUSAutocompleteQuery(env.DB, query, cappedLimit);
     
     // Return successful result
     return new Response(
@@ -367,8 +319,8 @@ async function handleUSAutocomplete(request, env) {
   } catch (error) {
     return new Response(
       JSON.stringify({ 
-        error: 'Failed to load zipcode data',
-        details: error.message 
+        error: 'Failed to query zipcode data',
+        details: error.message
       }), 
       {
         status: 500,
@@ -415,34 +367,13 @@ async function handleCAAutocomplete(request, env) {
   // Cap limit to prevent excessive processing
   const cappedLimit = Math.min(limit, 25);
   
-  // Load Canada postal code data from R2 storage
   try {
-    let zipcodesCA;
-    
-    // Try R2 binding first
-    if (env.ZIP_DATA) {
-      try {
-        const object = await env.ZIP_DATA.get('zipcodes.ca.json');
-        if (object) {
-          zipcodesCA = await object.json();
-        }
-      } catch (error) {
-        console.log('R2 binding failed for Canada data:', error.message);
-      }
+    // Query D1 database for Canada autocomplete
+    if (!env.DB) {
+      throw new Error('Database binding not available');
     }
-    
-    // Fallback to public URL if R2 binding failed or no data found
-    if (!zipcodesCA) {
-      console.log('Using public URL fallback for Canada data');
-      const response = await fetch('https://pub-522895a2a41b453ab908b4e31d9e627a.r2.dev/zipcodes.ca.json');
-      if (!response.ok) {
-        throw new Error(`Failed to fetch Canada data from public URL: ${response.status}`);
-      }
-      zipcodesCA = await response.json();
-    }
-    
-    // Perform autocomplete search with timeout protection
-    const results = await performAutocompleteWithTimeout(zipcodesCA, query, cappedLimit, true);
+
+    const results = await performCAAutocompleteQuery(env.DB, query, cappedLimit);
     
     // Return successful result
     return new Response(
@@ -463,7 +394,7 @@ async function handleCAAutocomplete(request, env) {
   } catch (error) {
     return new Response(
       JSON.stringify({ 
-        error: 'Failed to load postal code data',
+        error: 'Failed to query postal code data',
         details: error.message 
       }), 
       {
@@ -510,7 +441,7 @@ async function handleMXAutocomplete(request, env) {
   // Cap limit to prevent excessive processing
   const cappedLimit = Math.min(limit, 25);
   
-  // Load Mexico postal code data from R2 storage
+  // Load Mexico postal code data from R2 storage (unchanged - still using R2)
   try {
     let zipcodesMX;
     
@@ -573,31 +504,155 @@ async function handleMXAutocomplete(request, env) {
 }
 
 /**
- * Find zipcode in data array with case-insensitive matching
+ * Perform US autocomplete using D1 database queries
  */
-function findZipcode(data, city, state) {
-  const cityLower = city.toLowerCase();
-  const stateLower = state.toLowerCase();
+async function performUSAutocompleteQuery(db, query, limit) {
+  const queryLower = query.toLowerCase().trim();
+  const isNumericQuery = /^\d+/.test(query);
   
-  return data.find(item => 
-    item.place && item.state_code &&
-    item.place.toLowerCase() === cityLower && 
-    item.state_code.toLowerCase() === stateLower
-  );
+  if (isNumericQuery) {
+    // ZIP code search
+    const stmt = db.prepare(`
+      SELECT DISTINCT zipcode, place, state_code
+      FROM us_zipcodes 
+      WHERE zipcode LIKE ?
+      ORDER BY zipcode
+      LIMIT ?
+    `);
+    
+    const results = await stmt.bind(`${query}%`, limit).all();
+    
+    return results.results.map(item => ({
+      type: 'zipcode',
+      display: `${item.zipcode} - ${item.place}, ${item.state_code}`,
+      value: item.zipcode,
+      city: item.place,
+      state: item.state_code,
+      zipcode: item.zipcode
+    }));
+  } else {
+    // City name search
+    const hasComma = queryLower.includes(',');
+    
+    if (hasComma) {
+      const [cityPart, statePart] = queryLower.split(',').map(s => s.trim());
+      
+      const stmt = db.prepare(`
+        SELECT DISTINCT place, state_code, zipcode
+        FROM us_zipcodes 
+        WHERE LOWER(place) LIKE LOWER(?) AND LOWER(state_code) LIKE LOWER(?)
+        ORDER BY place, state_code
+        LIMIT ?
+      `);
+      
+      const results = await stmt.bind(`${cityPart}%`, `${statePart}%`, limit).all();
+      
+      return results.results.map(item => ({
+        type: 'city',
+        display: `${item.place}, ${item.state_code}`,
+        value: `${item.place}, ${item.state_code}`,
+        city: item.place,
+        state: item.state_code,
+        zipcode: item.zipcode
+      }));
+    } else {
+      // Simple city search
+      const stmt = db.prepare(`
+        SELECT DISTINCT place, state_code, zipcode
+        FROM us_zipcodes 
+        WHERE LOWER(place) LIKE LOWER(?)
+        ORDER BY place, state_code
+        LIMIT ?
+      `);
+      
+      const results = await stmt.bind(`${queryLower}%`, limit).all();
+      
+      return results.results.map(item => ({
+        type: 'city',
+        display: `${item.place}, ${item.state_code}`,
+        value: `${item.place}, ${item.state_code}`,
+        city: item.place,
+        state: item.state_code,
+        zipcode: item.zipcode
+      }));
+    }
+  }
 }
 
 /**
- * Find postal code in Canada data array with case-insensitive matching
+ * Perform Canada autocomplete using D1 database queries
  */
-function findPostalCode(data, city, province) {
-  const cityLower = city.toLowerCase();
-  const provinceLower = province.toLowerCase();
+async function performCAAutocompleteQuery(db, query, limit) {
+  const queryLower = query.toLowerCase().trim();
+  const isNumericQuery = /^\d+/.test(query);
   
-  return data.find(item => 
-    item.place && item.state_code &&
-    item.place.toLowerCase() === cityLower && 
-    item.state_code.toLowerCase() === provinceLower
-  );
+  if (isNumericQuery) {
+    // Postal code search
+    const stmt = db.prepare(`
+      SELECT DISTINCT zipcode, place, state_code
+      FROM ca_zipcodes 
+      WHERE LOWER(zipcode) LIKE LOWER(?)
+      ORDER BY zipcode
+      LIMIT ?
+    `);
+    
+    const results = await stmt.bind(`${query}%`, limit).all();
+    
+    return results.results.map(item => ({
+      type: 'zipcode',
+      display: `${item.zipcode} - ${item.place}, ${item.state_code}`,
+      value: item.zipcode,
+      city: item.place,
+      state: item.state_code,
+      zipcode: item.zipcode
+    }));
+  } else {
+    // City name search
+    const hasComma = queryLower.includes(',');
+    
+    if (hasComma) {
+      const [cityPart, provincePart] = queryLower.split(',').map(s => s.trim());
+      
+      const stmt = db.prepare(`
+        SELECT DISTINCT place, state_code, zipcode
+        FROM ca_zipcodes 
+        WHERE LOWER(place) LIKE LOWER(?) AND LOWER(state_code) LIKE LOWER(?)
+        ORDER BY place, state_code
+        LIMIT ?
+      `);
+      
+      const results = await stmt.bind(`${cityPart}%`, `${provincePart}%`, limit).all();
+      
+      return results.results.map(item => ({
+        type: 'city',
+        display: `${item.place}, ${item.state_code}`,
+        value: `${item.place}, ${item.state_code}`,
+        city: item.place,
+        state: item.state_code,
+        zipcode: item.zipcode
+      }));
+    } else {
+      // Simple city search
+      const stmt = db.prepare(`
+        SELECT DISTINCT place, state_code, zipcode
+        FROM ca_zipcodes 
+        WHERE LOWER(place) LIKE LOWER(?)
+        ORDER BY place, state_code
+        LIMIT ?
+      `);
+      
+      const results = await stmt.bind(`${queryLower}%`, limit).all();
+      
+      return results.results.map(item => ({
+        type: 'city',
+        display: `${item.place}, ${item.state_code}`,
+        value: `${item.place}, ${item.state_code}`,
+        city: item.place,
+        state: item.state_code,
+        zipcode: item.zipcode
+      }));
+    }
+  }
 }
 
 /**
@@ -623,7 +678,7 @@ function getCORSHeaders() {
 }
 
 /**
- * Perform autocomplete search with timeout protection
+ * Perform autocomplete search with timeout protection (for Mexico R2 data)
  * @param {Array} data - The zipcode/postal code data array
  * @param {string} query - The search query
  * @param {number} limit - Maximum number of results to return
@@ -650,7 +705,7 @@ async function performAutocompleteWithTimeout(data, query, limit, isCanada = fal
 }
 
 /**
- * Optimized autocomplete search with chunked processing
+ * Optimized autocomplete search with chunked processing (for Mexico R2 data)
  * @param {Array} data - The zipcode/postal code data array
  * @param {string} query - The search query
  * @param {number} limit - Maximum number of results to return
@@ -787,6 +842,13 @@ function performAutocompleteOptimized(data, query, limit, isCanada = false, isMe
     const bExact = b.display.toLowerCase().startsWith(queryLower);
     
     if (aExact && !bExact) return -1;
+    if (!aExact && bExact) return 1;
+    
+    return a.display.localeCompare(b.display);
+  });
+  
+  return matches;
+}
     if (!aExact && bExact) return 1;
     
     return a.display.localeCompare(b.display);

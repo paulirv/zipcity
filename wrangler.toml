@@ -22,6 +22,11 @@ compatibility_date = "2025-07-16"
 binding = "ZIP_DATA"
 bucket_name = "zipcity"
 
+[[d1_databases]]
+binding = "DB"
+database_name = "zipcity-data"
+database_id = "5ea45c91-9c2b-4c85-a39f-285932fe9207"
+
 # Custom domain routing (active)
 # DNS CNAME: zipcity.iwpi.com -> zip-city-lookup.paul-bb4.workers.dev
 [[routes]]
