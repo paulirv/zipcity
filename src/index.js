@@ -531,16 +531,17 @@ async function performUSAutocompleteQuery(db, query, limit) {
       zipcode: item.zipcode
     }));
   } else {
-    // City name search
+    // City name search - group by city/state to avoid duplicates
     const hasComma = queryLower.includes(',');
     
     if (hasComma) {
       const [cityPart, statePart] = queryLower.split(',').map(s => s.trim());
       
       const stmt = db.prepare(`
-        SELECT DISTINCT place, state_code, zipcode
+        SELECT place, state_code, MIN(zipcode) as zipcode
         FROM us_zipcodes 
         WHERE LOWER(place) LIKE LOWER(?) AND LOWER(state_code) LIKE LOWER(?)
+        GROUP BY place, state_code
         ORDER BY place, state_code
         LIMIT ?
       `);
@@ -556,11 +557,12 @@ async function performUSAutocompleteQuery(db, query, limit) {
         zipcode: item.zipcode
       }));
     } else {
-      // Simple city search
+      // Simple city search - group by city/state to avoid duplicates
       const stmt = db.prepare(`
-        SELECT DISTINCT place, state_code, zipcode
+        SELECT place, state_code, MIN(zipcode) as zipcode
         FROM us_zipcodes 
         WHERE LOWER(place) LIKE LOWER(?)
+        GROUP BY place, state_code
         ORDER BY place, state_code
         LIMIT ?
       `);
@@ -607,16 +609,17 @@ async function performCAAutocompleteQuery(db, query, limit) {
       zipcode: item.zipcode
     }));
   } else {
-    // City name search
+    // City name search - group by city/state to avoid duplicates
     const hasComma = queryLower.includes(',');
     
     if (hasComma) {
       const [cityPart, provincePart] = queryLower.split(',').map(s => s.trim());
       
       const stmt = db.prepare(`
-        SELECT DISTINCT place, state_code, zipcode
+        SELECT place, state_code, MIN(zipcode) as zipcode
         FROM ca_zipcodes 
         WHERE LOWER(place) LIKE LOWER(?) AND LOWER(state_code) LIKE LOWER(?)
+        GROUP BY place, state_code
         ORDER BY place, state_code
         LIMIT ?
       `);
@@ -632,11 +635,12 @@ async function performCAAutocompleteQuery(db, query, limit) {
         zipcode: item.zipcode
       }));
     } else {
-      // Simple city search
+      // Simple city search - group by city/state to avoid duplicates
       const stmt = db.prepare(`
-        SELECT DISTINCT place, state_code, zipcode
+        SELECT place, state_code, MIN(zipcode) as zipcode
         FROM ca_zipcodes 
         WHERE LOWER(place) LIKE LOWER(?)
+        GROUP BY place, state_code
         ORDER BY place, state_code
         LIMIT ?
       `);
@@ -842,13 +846,6 @@ function performAutocompleteOptimized(data, query, limit, isCanada = false, isMe
     const bExact = b.display.toLowerCase().startsWith(queryLower);
     
     if (aExact && !bExact) return -1;
-    if (!aExact && bExact) return 1;
-    
-    return a.display.localeCompare(b.display);
-  });
-  
-  return matches;
-}
     if (!aExact && bExact) return 1;
     
     return a.display.localeCompare(b.display);
