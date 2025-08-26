@@ -586,14 +586,16 @@ async function performUSAutocompleteQuery(db, query, limit) {
  */
 async function performCAAutocompleteQuery(db, query, limit) {
   const queryLower = query.toLowerCase().trim();
-  const isNumericQuery = /^\d+/.test(query);
+  // Canadian postal codes can be alphanumeric (e.g., T1Y, H3H, etc.)
+  // They typically follow pattern: Letter+Digit+Letter (first 3 chars)
+  const isPostalCodeQuery = /^[A-Za-z]\d[A-Za-z]?/.test(query) || /^\d+/.test(query);
   
-  if (isNumericQuery) {
-    // Postal code search
+  if (isPostalCodeQuery) {
+    // Postal code search - use UPPER for both sides since Canadian postal codes are typically uppercase
     const stmt = db.prepare(`
       SELECT DISTINCT zipcode, place, state_code
       FROM ca_zipcodes 
-      WHERE LOWER(zipcode) LIKE LOWER(?)
+      WHERE UPPER(zipcode) LIKE UPPER(?)
       ORDER BY zipcode
       LIMIT ?
     `);
