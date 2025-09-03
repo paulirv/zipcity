@@ -14,9 +14,6 @@ worker/
 .env.local
 .env.production
 
-# Data
-data/
-
 # Editor
 .vscode/
 .idea/
