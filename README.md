@@ -7,7 +7,7 @@ A lightweight Cloudflare Worker that returns the ZIP/postal code for a given cit
 - **/api/us** — Lookup U.S. ZIP by `?city=` & `?state=`
 - **/api/ca** — Lookup Canada postal code by `?city=` & `?province=`
 - **R2 Storage** — Data stored in Cloudflare R2 bucket for scalability
-- **Zero-config SSL** — Supports custom domains (`zipcity.iwpi.com`) via Cloudflare's Automatic SSL
+- **Zero-config SSL** — Supports custom domains (`zipcity.example.com`) via Cloudflare's Automatic SSL
 - **Global CDN** — Fast responses worldwide with Cloudflare's edge network
 
 ## Quick Start
@@ -27,7 +27,7 @@ wrangler login
 npm run deploy
 
 # Test production API
-curl -s "https://zipcity.iwpi.com/api/us?city=Burlington&state=WI"
+curl -s "https://zipcity.example.com/api/us?city=Burlington&state=WI"
 ```
 
 ## Repository Structure
@@ -52,7 +52,7 @@ curl -s "https://zipcity.iwpi.com/api/us?city=Burlington&state=WI"
 ### US ZIP Lookup
 
 ```bash
-curl -s "https://zipcity.iwpi.com/api/us?city=Burlington&state=WI"
+curl -s "https://zipcity.example.com/api/us?city=Burlington&state=WI"
 ```
 
 **Response:**
@@ -74,7 +74,7 @@ curl -s "https://zipcity.iwpi.com/api/us?city=Burlington&state=WI"
 ### Canada Postal Code Lookup
 
 ```bash
-curl -s "https://zipcity.iwpi.com/api/ca?city=Toronto&province=ON"
+curl -s "https://zipcity.example.com/api/ca?city=Toronto&province=ON"
 ```
 
 **Response:**
@@ -88,9 +88,9 @@ curl -s "https://zipcity.iwpi.com/api/ca?city=Toronto&province=ON"
 
 ## Custom Domain Setup
 
-To set up `zipcity.iwpi.com` with SSL:
+To set up `zipcity.example.com` with SSL:
 
-1. **Add DNS CNAME**: `zipcity.iwpi.com` → `your-worker.your-subdomain.workers.dev`
+1. **Add DNS CNAME**: `zipcity.example.com` → `your-worker.your-subdomain.workers.dev`
 2. **Add Custom Domain** in Cloudflare Workers dashboard
 3. **Enable Automatic HTTPS** (SSL certificate auto-provisioned)
 4. **Update wrangler.toml** routes section
@@ -132,8 +132,8 @@ curl -s "http://localhost:8787/api/us?city=Burlington&state=WI"
 curl -s "http://localhost:8787/api/ca?city=Toronto&province=ON"
 
 # Manual testing - Production
-curl -s "https://zipcity.iwpi.com/api/us?city=Burlington&state=WI"
-curl -s "https://zipcity.iwpi.com/api/ca?city=Toronto&province=ON"
+curl -s "https://zipcity.example.com/api/us?city=Burlington&state=WI"
+curl -s "https://zipcity.example.com/api/ca?city=Toronto&province=ON"
 ```
 
 ## Performance Notes
