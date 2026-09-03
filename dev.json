@@ -1,0 +1,26 @@
+{
+  "server": {
+    "command": "npm run dev",
+    "port": 5630,
+    "health": "/",
+    "restart": "on-failure",
+    "env": {}
+  },
+  "auth": {
+    "adapter": "d1",
+    "users_file": null,
+    "provision_command": null
+  },
+  "access": {
+    "localhost": "http://localhost:5630",
+    "farm_01": null
+  },
+  "_bob_ports": {
+    "_comment": "generated from BOB_SOURCE/provisions/ports.json \u2014 do not edit (regenerate via cdi)",
+    "base": 5630,
+    "vite": 5630,
+    "wrangler": 5631,
+    "dashboard": 5632,
+    "docs": 5633
+  }
+}

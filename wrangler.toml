@@ -1,9 +1,15 @@
 # Cloudflare Worker configuration for Zip-City Lookup
+#
+# Production target: NanaWall account, service zip-city-lookup, environment
+# production. This is the script that serves
+# https://zip-city-lookup.nana-wall-systems-enterprise.workers.dev (the host
+# nanawalld8's repfinder calls). Do not deploy against any other account or D1.
 name = "zip-city-lookup"
 main = "src/index.js"
 compatibility_date = "2025-07-16"
+account_id = "68e5fdab2d5644181406329dbca94fda"
 
-# Workers KV namespaces (optional - for future migration from R2)
+# Workers KV namespaces (optional - for future migration from D1)
 # Uncomment and configure when migrating to KV storage:
 # Create with: wrangler kv namespace create "ZIP_US"
 # [[kv_namespaces]]
@@ -16,22 +22,19 @@ compatibility_date = "2025-07-16"
 # id = "your-ca-zipcode-kv-namespace-id"
 # preview_id = "your-ca-zipcode-preview-kv-namespace-id"
 
-# R2 bucket bindings (currently active)
-# Created with: wrangler r2 bucket create zipcity
-[[r2_buckets]]
-binding = "ZIP_DATA"
-bucket_name = "zipcity"
+# No R2 binding: the live script carries only the D1 binding. The Mexico
+# autocomplete path falls back to the public R2 URL in src/index.js, which is
+# how production behaves today (nanawalld8 never calls /api/autocomplete/mx).
 
+# D1: zipcity-data in the NanaWall account (us_zipcodes, ca_zipcodes)
 [[d1_databases]]
 binding = "DB"
 database_name = "zipcity-data"
-database_id = "5ea45c91-9c2b-4c85-a39f-285932fe9207"
+database_id = "7fe2e03d-a774-45bb-8410-2d0f4f92b113"
 
-# Custom domain routing (active)
-# DNS CNAME: zipcity.iwpi.com -> zip-city-lookup.paul-bb4.workers.dev
-[[routes]]
-pattern = "zipcity.iwpi.com/api/*"
-zone_name = "iwpi.com"
+# Local dev server port (matches dev.json / the BoB port band below)
+[dev]
+port = 5630
 
 [vars]
 # Environment variables (if needed)
@@ -40,3 +43,8 @@ zone_name = "iwpi.com"
 [observability]
 enabled = true
 head_sampling_rate = 1 # optional. default = 1.
+
+# >>> bob:ports — generated from BOB_SOURCE/provisions/ports.json; do not edit (regenerate via cdi) >>>
+# base=5630 vite=5630 wrangler=5631 dashboard=5632 docs=5633
+# wire wrangler dev to 5631 via `wrangler dev --port 5631` or [dev] port
+# <<< bob:ports <<<

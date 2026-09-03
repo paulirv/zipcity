@@ -26,3 +26,15 @@ Thumbs.db
 
 # Logs
 *.log
+.bob-artifacts/
+.playwright-mcp/
+# --- BoB-provisioned (managed by cdprov — do not edit) ---
+.claude/agents/code-debugger.md
+.claude/agents/code-reviewer.md
+.claude/commands/status.md
+.claude/forge/
+.claude/settings.local.json
+.claude/skills/api-designing
+.claude/skills/cloudflare-dev
+# --- end BoB-provisioned ---
+.dev-server.pid

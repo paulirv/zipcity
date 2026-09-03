@@ -1,7 +1,10 @@
 #!/bin/bash
 
-# Production Test Script for zipcity.iwpi.com
-# Tests the live API endpoints
+# Production Test Script for the deployed zip-city-lookup Worker
+# Tests the live API endpoints on the host nanawalld8 calls.
+#
+#   ./test-production.sh
+#   BASE_URL=https://other-host ./test-production.sh
 
 # Colors for output
 RED='\033[0;31m'
@@ -9,87 +12,55 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${YELLOW}🚀 Testing Production API: zipcity.iwpi.com${NC}"
-echo
+# Production URL (NanaWall account, service zip-city-lookup)
+BASE_URL="${BASE_URL:-https://zip-city-lookup.nana-wall-systems-enterprise.workers.dev}"
 
-# Production URL
-BASE_URL="https://zipcity.iwpi.com"
+PASS=0
+FAIL=0
+
+# check <number> <description> <url-path> <grep -E pattern>
+check() {
+    local n="$1" desc="$2" path="$3" pattern="$4"
+    echo -e "\n${n}. ${desc}"
+    local response
+    response=$(curl -s "${BASE_URL}${path}")
+    echo "Response: ${response}"
+    if echo "$response" | grep -qE "$pattern"; then
+        echo -e "${GREEN}✅ Test ${n} PASSED${NC}"
+        PASS=$((PASS + 1))
+    else
+        echo -e "${RED}❌ Test ${n} FAILED${NC}"
+        FAIL=$((FAIL + 1))
+    fi
+}
+
+echo -e "${YELLOW}🚀 Testing Production API: ${BASE_URL}${NC}"
+echo
 
 echo -e "${YELLOW}Testing US ZIP lookup...${NC}"
-
-# Test 1: Valid lookup - Burlington, WI
-echo -e "\n1. Testing valid lookup: Burlington, WI"
-RESPONSE=$(curl -s "${BASE_URL}/api/us?city=Burlington&state=WI")
-echo "Response: $RESPONSE"
-
-if echo "$RESPONSE" | grep -q '"zip":"53105"'; then
-    echo -e "${GREEN}✅ Test 1 PASSED${NC}"
-else
-    echo -e "${RED}❌ Test 1 FAILED${NC}"
-fi
-
-# Test 2: Case insensitive lookup
-echo -e "\n2. Testing case insensitive lookup: burlington, wi"
-RESPONSE=$(curl -s "${BASE_URL}/api/us?city=burlington&state=wi")
-echo "Response: $RESPONSE"
-
-if echo "$RESPONSE" | grep -q '"zip":"53105"'; then
-    echo -e "${GREEN}✅ Test 2 PASSED${NC}"
-else
-    echo -e "${RED}❌ Test 2 FAILED${NC}"
-fi
-
-# Test 3: Different city
-echo -e "\n3. Testing different city: Chicago, IL"
-RESPONSE=$(curl -s "${BASE_URL}/api/us?city=Chicago&state=IL")
-echo "Response: $RESPONSE"
-
-if echo "$RESPONSE" | grep -q '"zip":"60601"'; then
-    echo -e "${GREEN}✅ Test 3 PASSED${NC}"
-else
-    echo -e "${RED}❌ Test 3 FAILED${NC}"
-fi
+check 1 "Valid lookup: Burlington, WI"            "/api/us?city=Burlington&state=WI" '"zip":"53105"'
+check 2 "Case insensitive lookup: burlington, wi" "/api/us?city=burlington&state=wi" '"zip":"53105"'
+check 3 "Different city: Chicago, IL"             "/api/us?city=Chicago&state=IL" '"zip":"60601"'
+check 4 "Lookup by ZIP: 93101"                    "/api/us?zip=93101" '"city":"Santa Barbara"'
+check 5 "Lookup carries lat/lon"                  "/api/us?city=Burlington&state=WI" '"lat":-?[0-9].*"lon":-?[0-9]'
+check 6 "Not found: NonExistentCity, ZZ"          "/api/us?city=NonExistentCity&state=ZZ" '"error":"Not found"'
 
 echo -e "\n${YELLOW}Testing Canada postal code lookup...${NC}"
+check 7 "Valid Canada lookup: Toronto, ON"            "/api/ca?city=Toronto&province=ON" '"postal_code":"M5A"'
+check 8 "Case insensitive Canada lookup: toronto, on" "/api/ca?city=toronto&province=on" '"postal_code":"M5A"'
+check 9 "Lookup by postal code (FSA): M5A"            "/api/ca?postal=M5A" '"city":"Toronto"'
 
-# Test 4: Valid Canada lookup - Toronto, ON
-echo -e "\n4. Testing valid Canada lookup: Toronto, ON"
-RESPONSE=$(curl -s "${BASE_URL}/api/ca?city=Toronto&province=ON")
-echo "Response: $RESPONSE"
+echo -e "\n${YELLOW}Testing autocomplete...${NC}"
+check 10 "US autocomplete row carries lat/lon" "/api/autocomplete/us?q=santa%20bar&limit=1" '"city":"Santa Barbara".*"lat":-?[0-9].*"lon":-?[0-9]'
+check 11 "CA autocomplete row carries lat/lon" "/api/autocomplete/ca?q=toron&limit=1" '"city":"Toronto".*"lat":-?[0-9].*"lon":-?[0-9]'
 
-if echo "$RESPONSE" | grep -q '"postal_code":"M5A"'; then
-    echo -e "${GREEN}✅ Test 4 PASSED${NC}"
-else
-    echo -e "${RED}❌ Test 4 FAILED${NC}"
-fi
-
-# Test 5: Case insensitive Canada lookup
-echo -e "\n5. Testing case insensitive Canada lookup: toronto, on"
-RESPONSE=$(curl -s "${BASE_URL}/api/ca?city=toronto&province=on")
-echo "Response: $RESPONSE"
-
-if echo "$RESPONSE" | grep -q '"postal_code":"M5A"'; then
-    echo -e "${GREEN}✅ Test 5 PASSED${NC}"
-else
-    echo -e "${RED}❌ Test 5 FAILED${NC}"
-fi
-
-# Test 6: Not found
-echo -e "\n6. Testing not found: NonExistentCity, ZZ"
-RESPONSE=$(curl -s "${BASE_URL}/api/us?city=NonExistentCity&state=ZZ")
-echo "Response: $RESPONSE"
-
-if echo "$RESPONSE" | grep -q '"error":"Not found"'; then
-    echo -e "${GREEN}✅ Test 6 PASSED${NC}"
-else
-    echo -e "${RED}❌ Test 6 FAILED${NC}"
-fi
-
-echo -e "\n${YELLOW}🏁 Production testing complete!${NC}"
+echo -e "\n${YELLOW}🏁 Production testing complete: ${PASS} passed, ${FAIL} failed${NC}"
 echo
 echo -e "${YELLOW}Production API Examples:${NC}"
-echo "curl -s \"https://zipcity.iwpi.com/api/us?city=Burlington&state=WI\""
-echo "curl -s \"https://zipcity.iwpi.com/api/us?city=Chicago&state=IL\""
-echo "curl -s \"https://zipcity.iwpi.com/api/us?city=Austin&state=TX\""
-echo "curl -s \"https://zipcity.iwpi.com/api/ca?city=Toronto&province=ON\""
-echo "curl -s \"https://zipcity.iwpi.com/api/ca?city=Vancouver&province=BC\""
+echo "curl -s \"${BASE_URL}/api/us?city=Burlington&state=WI\""
+echo "curl -s \"${BASE_URL}/api/us?zip=53105\""
+echo "curl -s \"${BASE_URL}/api/ca?city=Toronto&province=ON\""
+echo "curl -s \"${BASE_URL}/api/ca?postal=M5A\""
+echo "curl -s \"${BASE_URL}/api/autocomplete/us?q=santa%20bar&limit=5\""
+
+[ "$FAIL" -eq 0 ]
