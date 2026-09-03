@@ -513,7 +513,7 @@ async function performUSAutocompleteQuery(db, query, limit) {
   if (isNumericQuery) {
     // ZIP code search
     const stmt = db.prepare(`
-      SELECT DISTINCT zipcode, place, state_code
+      SELECT DISTINCT zipcode, place, state_code, latitude, longitude
       FROM us_zipcodes 
       WHERE zipcode LIKE ?
       ORDER BY zipcode
@@ -528,7 +528,9 @@ async function performUSAutocompleteQuery(db, query, limit) {
       value: item.zipcode,
       city: item.place,
       state: item.state_code,
-      zipcode: item.zipcode
+      zipcode: item.zipcode,
+      lat: toCoord(item.latitude),
+      lon: toCoord(item.longitude)
     }));
   } else {
     // City name search - group by city/state to avoid duplicates
@@ -538,7 +540,8 @@ async function performUSAutocompleteQuery(db, query, limit) {
       const [cityPart, statePart] = queryLower.split(',').map(s => s.trim());
       
       const stmt = db.prepare(`
-        SELECT place, state_code, MIN(zipcode) as zipcode
+        SELECT place, state_code, MIN(zipcode) as zipcode,
+               AVG(latitude) as latitude, AVG(longitude) as longitude
         FROM us_zipcodes 
         WHERE LOWER(place) LIKE LOWER(?) AND LOWER(state_code) LIKE LOWER(?)
         GROUP BY place, state_code
@@ -554,12 +557,15 @@ async function performUSAutocompleteQuery(db, query, limit) {
         value: `${item.place}, ${item.state_code}`,
         city: item.place,
         state: item.state_code,
-        zipcode: item.zipcode
+        zipcode: item.zipcode,
+        lat: toCoord(item.latitude),
+        lon: toCoord(item.longitude)
       }));
     } else {
       // Simple city search - group by city/state to avoid duplicates
       const stmt = db.prepare(`
-        SELECT place, state_code, MIN(zipcode) as zipcode
+        SELECT place, state_code, MIN(zipcode) as zipcode,
+               AVG(latitude) as latitude, AVG(longitude) as longitude
         FROM us_zipcodes 
         WHERE LOWER(place) LIKE LOWER(?)
         GROUP BY place, state_code
@@ -575,7 +581,9 @@ async function performUSAutocompleteQuery(db, query, limit) {
         value: `${item.place}, ${item.state_code}`,
         city: item.place,
         state: item.state_code,
-        zipcode: item.zipcode
+        zipcode: item.zipcode,
+        lat: toCoord(item.latitude),
+        lon: toCoord(item.longitude)
       }));
     }
   }
@@ -593,7 +601,7 @@ async function performCAAutocompleteQuery(db, query, limit) {
   if (isPostalCodeQuery) {
     // Postal code search - use UPPER for both sides since Canadian postal codes are typically uppercase
     const stmt = db.prepare(`
-      SELECT DISTINCT zipcode, place, state_code
+      SELECT DISTINCT zipcode, place, state_code, latitude, longitude
       FROM ca_zipcodes 
       WHERE UPPER(zipcode) LIKE UPPER(?)
       ORDER BY zipcode
@@ -608,7 +616,9 @@ async function performCAAutocompleteQuery(db, query, limit) {
       value: item.zipcode,
       city: item.place,
       state: item.state_code,
-      zipcode: item.zipcode
+      zipcode: item.zipcode,
+      lat: toCoord(item.latitude),
+      lon: toCoord(item.longitude)
     }));
   } else {
     // City name search - group by city/state to avoid duplicates
@@ -618,7 +628,8 @@ async function performCAAutocompleteQuery(db, query, limit) {
       const [cityPart, provincePart] = queryLower.split(',').map(s => s.trim());
       
       const stmt = db.prepare(`
-        SELECT place, state_code, MIN(zipcode) as zipcode
+        SELECT place, state_code, MIN(zipcode) as zipcode,
+               AVG(latitude) as latitude, AVG(longitude) as longitude
         FROM ca_zipcodes 
         WHERE LOWER(place) LIKE LOWER(?) AND LOWER(state_code) LIKE LOWER(?)
         GROUP BY place, state_code
@@ -634,12 +645,15 @@ async function performCAAutocompleteQuery(db, query, limit) {
         value: `${item.place}, ${item.state_code}`,
         city: item.place,
         state: item.state_code,
-        zipcode: item.zipcode
+        zipcode: item.zipcode,
+        lat: toCoord(item.latitude),
+        lon: toCoord(item.longitude)
       }));
     } else {
       // Simple city search - group by city/state to avoid duplicates
       const stmt = db.prepare(`
-        SELECT place, state_code, MIN(zipcode) as zipcode
+        SELECT place, state_code, MIN(zipcode) as zipcode,
+               AVG(latitude) as latitude, AVG(longitude) as longitude
         FROM ca_zipcodes 
         WHERE LOWER(place) LIKE LOWER(?)
         GROUP BY place, state_code
@@ -655,10 +669,22 @@ async function performCAAutocompleteQuery(db, query, limit) {
         value: `${item.place}, ${item.state_code}`,
         city: item.place,
         state: item.state_code,
-        zipcode: item.zipcode
+        zipcode: item.zipcode,
+        lat: toCoord(item.latitude),
+        lon: toCoord(item.longitude)
       }));
     }
   }
+}
+
+/**
+ * Normalise a D1 coordinate column to a number, or null when the row has no
+ * coordinate (NULL in D1, or a non-numeric string in an older import).
+ */
+function toCoord(value) {
+  if (value === null || value === undefined) return null;
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
 }
 
 /**
