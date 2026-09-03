@@ -25,8 +25,8 @@ wrangler d1 execute zipcity-data --file=schema.sql            # Apply schema to 
 wrangler d1 execute zipcity-data --local --file=data/zipcodes.us.sql
 wrangler d1 execute zipcity-data --local --file=data/zipcodes.ca.sql
 
-# Production D1 sanity check (run before deploying)
-wrangler d1 execute zipcity-data --command "SELECT COUNT(*) AS n, SUM(latitude IS NULL) AS missing FROM us_zipcodes"
+# Production D1 sanity check (run before deploying — see Deploy checklist)
+wrangler d1 execute zipcity-data --remote --command "SELECT COUNT(*) AS n, SUM(latitude IS NULL) AS missing FROM us_zipcodes"
 
 # Monitoring
 wrangler tail            # Real-time production logs
@@ -68,3 +68,27 @@ Indexes on `(place, state_code)` and `zipcode` for query performance.
 - Production host: `https://zip-city-lookup.nana-wall-systems-enterprise.workers.dev` (called by nanawalld8's repfinder proxy). Dashboard: https://dash.cloudflare.com/68e5fdab2d5644181406329dbca94fda/workers/services/view/zip-city-lookup/production
 - Local dev: `wrangler.toml [dev] port = 5630` must stay in step with `dev.json` (`bob ready` rewrites dev.json's port to the band base, 5630)
 - D1 database name: `zipcity-data`
+
+## Deploy checklist
+
+Deploys are manual and go to the NanaWall account only (promotion ceiling `external`; warp-drive never deploys this project).
+
+```bash
+# 1. Confirm the target account and D1 (must be 68e5fdab… / 7fe2e03d…)
+grep -E "account_id|database_id" wrangler.toml && wrangler whoami
+
+# 2. Confirm production D1 is populated with coordinates (expect 41,483 US / 1,655 CA rows, 0 missing)
+for t in us_zipcodes ca_zipcodes; do
+  wrangler d1 execute zipcity-data --remote --json \
+    --command "SELECT COUNT(*) AS n, SUM(latitude IS NULL) AS missing FROM $t"
+done
+
+# 3. Bundle without uploading; the only binding listed must be env.DB (zipcity-data)
+wrangler deploy --dry-run --outdir /tmp/zipcity-dist
+
+# 4. Deploy, then verify the live host
+npm run deploy
+./test-production.sh
+curl -s "https://zip-city-lookup.nana-wall-systems-enterprise.workers.dev/api/autocomplete/us?q=santa%20bar&limit=1"
+```
+
