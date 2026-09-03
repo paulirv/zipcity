@@ -5,8 +5,10 @@
  * Data is stored in Cloudflare D1 database for fast SQL queries.
  * 
  * Routes:
- * - GET /api/us?city=<city>&state=<state> - US ZIP lookup
- * - GET /api/ca?city=<city>&province=<province> - Canada postal code lookup
+ * - GET /api/us?city=<city>&state=<state> - US ZIP lookup (returns lat/lon)
+ * - GET /api/us?zip=<zip> - US ZIP lookup by ZIP code
+ * - GET /api/ca?city=<city>&province=<province> - Canada postal code lookup (returns lat/lon)
+ * - GET /api/ca?postal=<fsa> - Canada lookup by forward sortation area
  * - GET /api/autocomplete/us?q=<query>&limit=<limit> - US autocomplete for cities/zips
  * - GET /api/autocomplete/ca?q=<query>&limit=<limit> - Canada autocomplete for cities/postal codes
  * - GET /api/autocomplete/mx?q=<query>&limit=<limit> - Mexico autocomplete for states/postal codes
@@ -63,7 +65,9 @@ export default {
         error: 'Not found',
         available_endpoints: [
           '/api/us?city=<city>&state=<state>',
+          '/api/us?zip=<zip>',
           '/api/ca?city=<city>&province=<province>',
+          '/api/ca?postal=<fsa>',
           '/api/autocomplete/us?q=<query>&limit=<limit>',
           '/api/autocomplete/ca?q=<query>&limit=<limit>',
           '/api/autocomplete/mx?q=<query>&limit=<limit>'
@@ -82,180 +86,135 @@ export default {
 
 /**
  * Handle US ZIP code lookup
- * Expected query params: city, state
+ * Expected query params: zip, OR city + state
  * Example: /api/us?city=Burlington&state=WI
+ * Example: /api/us?zip=53105
  */
 async function handleUSLookup(request, env) {
   const url = new URL(request.url);
+  const zip = url.searchParams.get('zip');
   const city = url.searchParams.get('city');
   const state = url.searchParams.get('state');
-  
-  // Validate required parameters
-  if (!city || !state) {
-    return new Response(
-      JSON.stringify({ 
-        error: 'Missing required parameters', 
-        required: ['city', 'state'],
-        example: '/api/us?city=Burlington&state=WI'
-      }), 
-      {
-        status: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          ...getCORSHeaders()
-        }
-      }
-    );
+
+  // Validate required parameters: either zip, or both city and state
+  if (!zip && (!city || !state)) {
+    return jsonResponse({
+      error: 'Missing required parameters',
+      required: 'Either "zip" OR both "city" and "state"',
+      examples: ['/api/us?city=Burlington&state=WI', '/api/us?zip=53105']
+    }, 400);
   }
 
   try {
-    // Query D1 database for US zipcode data
     if (!env.DB) {
       throw new Error('Database binding not available');
     }
 
-    const stmt = env.DB.prepare(`
-      SELECT place, state_code, zipcode 
-      FROM us_zipcodes 
-      WHERE LOWER(place) = LOWER(?) AND LOWER(state_code) = LOWER(?)
-      LIMIT 1
-    `);
-    
-    const result = await stmt.bind(city, state).first();
-    
+    const result = await lookupRow(env.DB, 'us_zipcodes', { code: zip, city, region: state });
+
     if (!result) {
-      return new Response(
-        JSON.stringify({ error: 'Not found' }), 
-        {
-          status: 404,
-          headers: {
-            'Content-Type': 'application/json',
-            ...getCORSHeaders()
-          }
-        }
-      );
+      return jsonResponse({ error: 'Not found' }, 404);
     }
-    
-    // Return successful result
-    return new Response(
-      JSON.stringify({
-        city: result.place,
-        state: result.state_code,
-        zip: result.zipcode
-      }), 
-      {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-          ...getCORSHeaders()
-        }
-      }
-    );
-    
+
+    return jsonResponse({
+      city: result.place,
+      state: result.state_code,
+      zip: result.zipcode,
+      lat: toCoord(result.latitude),
+      lon: toCoord(result.longitude)
+    });
+
   } catch (error) {
-    return new Response(
-      JSON.stringify({ 
-        error: 'Failed to query zipcode data',
-        details: error.message 
-      }), 
-      {
-        status: 500,
-        headers: {
-          'Content-Type': 'application/json',
-          ...getCORSHeaders()
-        }
-      }
-    );
+    return jsonResponse({
+      error: 'Failed to query zipcode data',
+      details: error.message
+    }, 500);
   }
 }
 
 /**
  * Handle Canada postal code lookup
- * Expected query params: city, province
+ * Expected query params: postal (FSA), OR city + province
  * Example: /api/ca?city=Toronto&province=ON
+ * Example: /api/ca?postal=M5A
  */
 async function handleCALookup(request, env) {
   const url = new URL(request.url);
+  const postal = url.searchParams.get('postal');
   const city = url.searchParams.get('city');
   const province = url.searchParams.get('province');
-  
-  // Validate required parameters
-  if (!city || !province) {
-    return new Response(
-      JSON.stringify({ 
-        error: 'Missing required parameters', 
-        required: ['city', 'province'],
-        example: '/api/ca?city=Toronto&province=ON'
-      }), 
-      {
-        status: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          ...getCORSHeaders()
-        }
-      }
-    );
+
+  // Validate required parameters: either postal, or both city and province
+  if (!postal && (!city || !province)) {
+    return jsonResponse({
+      error: 'Missing required parameters',
+      required: 'Either "postal" OR both "city" and "province"',
+      examples: ['/api/ca?city=Toronto&province=ON', '/api/ca?postal=M5A']
+    }, 400);
   }
-  
+
   try {
-    // Query D1 database for Canada postal code data
     if (!env.DB) {
       throw new Error('Database binding not available');
     }
 
-    const stmt = env.DB.prepare(`
-      SELECT place, state_code, zipcode 
-      FROM ca_zipcodes 
-      WHERE LOWER(place) = LOWER(?) AND LOWER(state_code) = LOWER(?)
-      LIMIT 1
-    `);
-    
-    const result = await stmt.bind(city, province).first();
-    
+    // The table stores forward sortation areas (first 3 characters); accept a
+    // full postal code ("M5A 1A1") by reducing it to its FSA.
+    const fsa = postal ? postal.replace(/\s+/g, '').slice(0, 3) : null;
+    const result = await lookupRow(env.DB, 'ca_zipcodes', { code: fsa, city, region: province });
+
     if (!result) {
-      return new Response(
-        JSON.stringify({ error: 'Not found' }), 
-        {
-          status: 404,
-          headers: {
-            'Content-Type': 'application/json',
-            ...getCORSHeaders()
-          }
-        }
-      );
+      return jsonResponse({ error: 'Not found' }, 404);
     }
-    
-    // Return successful result
-    return new Response(
-      JSON.stringify({
-        city: result.place,
-        province: result.state_code,
-        postal_code: result.zipcode
-      }), 
-      {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-          ...getCORSHeaders()
-        }
-      }
-    );
-    
+
+    return jsonResponse({
+      city: result.place,
+      province: result.state_code,
+      postal_code: result.zipcode,
+      lat: toCoord(result.latitude),
+      lon: toCoord(result.longitude)
+    });
+
   } catch (error) {
-    return new Response(
-      JSON.stringify({ 
-        error: 'Failed to query postal code data',
-        details: error.message 
-      }), 
-      {
-        status: 500,
-        headers: {
-          'Content-Type': 'application/json',
-          ...getCORSHeaders()
-        }
-      }
-    );
+    return jsonResponse({
+      error: 'Failed to query postal code data',
+      details: error.message
+    }, 500);
   }
+}
+
+/**
+ * Fetch one row from a zipcode table by code, or by city + region code.
+ * Table names are fixed by the callers (never user input).
+ */
+async function lookupRow(db, table, { code, city, region }) {
+  if (code) {
+    return db.prepare(`
+      SELECT place, state_code, zipcode, latitude, longitude
+      FROM ${table}
+      WHERE UPPER(zipcode) = UPPER(?)
+      LIMIT 1
+    `).bind(code).first();
+  }
+  return db.prepare(`
+    SELECT place, state_code, zipcode, latitude, longitude
+    FROM ${table}
+    WHERE LOWER(place) = LOWER(?) AND LOWER(state_code) = LOWER(?)
+    LIMIT 1
+  `).bind(city, region).first();
+}
+
+/**
+ * Build a JSON response with CORS headers
+ */
+function jsonResponse(body, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      ...getCORSHeaders()
+    }
+  });
 }
 
 /**
